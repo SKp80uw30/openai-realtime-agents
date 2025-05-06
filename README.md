@@ -5,7 +5,7 @@ This is a simple demonstration of more advanced, agentic patterns built on top o
 - Background escalation to more intelligent models like o1-mini for high-stakes decisions
 - Prompting models to follow a state machine, for example to accurately collect things like names and phone numbers with confirmation character by character to authenticate a user.
 
-You should be able to use this repo to prototype your own multi-agent realtime voice app in less than 20 minutes!
+Here's a quick [demo video](https://x.com/OpenAIDevs/status/1880306081517432936) if you'd like a walkthrough. You should be able to use this repo to prototype your own multi-agent realtime voice app in less than 20 minutes!
 
 ![Screenshot of the Realtime API Agents Demo](/public/screenshot.png)
 
@@ -13,7 +13,7 @@ You should be able to use this repo to prototype your own multi-agent realtime v
 
 - This is a Next.js typescript app
 - Install dependencies with `npm i`
-- Add your `OPENAI_API_KEY` to your env
+- Add your `OPENAI_API_KEY` to your env. Either add it to your `.bash_profile` or equivalent file, or copy `.env.sample` to `.env` and add it there.
 - Start the server with `npm run dev`
 - Open your browser to [http://localhost:3000](http://localhost:3000) to see the app. It should automatically connect to the `simpleExample` Agent Set.
 
@@ -24,8 +24,8 @@ import { AgentConfig } from "@/app/types";
 import { injectTransferTools } from "./utils";
 
 // Define agents
-const haiku: AgentConfig = {
-  name: "haiku",
+const haikuWriter: AgentConfig = {
+  name: "haikuWriter",
   publicDescription: "Agent that writes haikus.", // Context for the agent_transfer tool
   instructions:
     "Ask the user for a topic, then reply with a haiku about that topic.",
@@ -38,11 +38,11 @@ const greeter: AgentConfig = {
   instructions:
     "Please greet the user and ask them if they'd like a Haiku. If yes, transfer them to the 'haiku' agent.",
   tools: [],
-  downstreamAgents: [haiku],
+  downstreamAgents: [haikuWriter],
 };
 
 // add the transfer tool to point to downstreamAgents
-const agents = injectTransferTools([greeter, haiku]);
+const agents = injectTransferTools([greeter, haikuWriter]);
 
 export default agents;
 ```
@@ -60,6 +60,9 @@ This fully specifies the agent set that was used in the interaction shown in the
 - To see how to define a detailed personality and tone, and use a prompt state machine to collect user information step by step, see [src/app/agentConfigs/frontDeskAuthentication/authentication.ts](src/app/agentConfigs/frontDeskAuthentication/authentication.ts)
 - To see how to wire up Agents into a single Agent Set, see [src/app/agentConfigs/frontDeskAuthentication/index.ts](src/app/agentConfigs/frontDeskAuthentication/index.ts)
 - If you want help creating your own prompt using these conventions, we've included a metaprompt [here](src/app/agentConfigs/voiceAgentMetaprompt.txt), or you can use our [Voice Agent Metaprompter GPT](https://chatgpt.com/g/g-678865c9fb5c81918fa28699735dd08e-voice-agent-metaprompt-gpt)
+
+### Customizing Output Guardrails
+Assistant messages are checked for safety and compliance using a guardrail function before being finalized in the transcript. This is implemented in [`src/app/hooks/useHandleServerEvent.ts`](src/app/hooks/useHandleServerEvent.ts) as the `processGuardrail` function, which is invoked on each assistant message to run a moderation/classification check. You can review or customize this logic by editing the `processGuardrail` function definition and its invocation inside `useHandleServerEvent`.
 
 ## UI
 - You can select agent scenarios in the Scenario dropdown, and automatically switch to a specific agent with the Agent dropdown.
