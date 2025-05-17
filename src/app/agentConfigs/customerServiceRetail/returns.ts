@@ -273,7 +273,7 @@ true/false/need_more_information
         },
       ];
 
-      const model = "o1-mini";
+      const model = "o4-mini";
       console.log(`checking order eligibility with model=${model}`);
 
       const response = await fetch("/api/chat/completions", {
