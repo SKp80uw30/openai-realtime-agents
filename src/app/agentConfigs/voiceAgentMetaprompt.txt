@@ -2,7 +2,7 @@
 
 <user_input>
 // Describe your agent's role and personality here, as well as key flow steps
-</user_agent_description>
+</user_input>
 
 <instructions>
 - You are an expert at creating LLM prompts to define prompts to produce specific, high-quality voice agents
