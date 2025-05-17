@@ -2,7 +2,7 @@
 
 This is a simple demonstration of more advanced, agentic patterns built on top of the Realtime API. In particular, this demonstrates:
 - Sequential agent handoffs according to a defined agent graph (taking inspiration from [OpenAI Swarm](https://github.com/openai/swarm))
-- Background escalation to more intelligent models like o1-mini for high-stakes decisions
+- Background escalation to more intelligent models like o4-mini for high-stakes decisions
 - Prompting models to follow a state machine, for example to accurately collect things like names and phone numbers with confirmation character by character to authenticate a user.
 
 Here's a quick [demo video](https://x.com/OpenAIDevs/status/1880306081517432936) if you'd like a walkthrough. You should be able to use this repo to prototype your own multi-agent realtime voice app in less than 20 minutes!
@@ -63,7 +63,7 @@ sequenceDiagram
     participant NextAPI as /api/session
     participant RealtimeAPI as OpenAI Realtime API
     participant AgentManager as Agents (authentication, returns, sales, simulatedHuman)
-    participant o1mini as "o1-mini" (Escalation Model)
+    participant o1mini as "o4-mini" (Escalation Model)
 
     Note over WebClient: User navigates to ?agentConfig=customerServiceRetail
     User->>WebClient: Open Page
@@ -96,11 +96,11 @@ sequenceDiagram
     returns->>AgentManager: function_call => checkEligibilityAndPossiblyInitiateReturn
     AgentManager-->>WebClient: function_call => name="checkEligibilityAndPossiblyInitiateReturn"
 
-    Note over WebClient: The WebClient calls /api/chat/completions with model="o1-mini"
+    Note over WebClient: The WebClient calls /api/chat/completions with model="o4-mini"
     WebClient->>o1mini: "Is this item eligible for return?"
     o1mini->>WebClient: "Yes/No (plus notes)"
 
-    Note right of returns: Returns uses the result from "o1-mini"
+    Note right of returns: Returns uses the result from "o4-mini"
     returns->>AgentManager: "Return is approved" or "Return is denied"
     AgentManager->>WebClient: conversation.item.create (assistant role)
     WebClient->>User: Displays final verdict
@@ -112,7 +112,7 @@ sequenceDiagram
 ### Next steps
 - Check out the configs in `src/app/agentConfigs`. The example above is a minimal demo that illustrates the core concepts.
 - [frontDeskAuthentication](src/app/agentConfigs/frontDeskAuthentication) Guides the user through a step-by-step authentication flow, confirming each value character-by-character, authenticates the user with a tool call, and then transfers to another agent. Note that the second agent is intentionally "bored" to show how to prompt for personality and tone.
-- [customerServiceRetail](src/app/agentConfigs/customerServiceRetail) Also guides through an authentication flow, reads a long offer from a canned script verbatim, and then walks through a complex return flow which requires looking up orders and policies, gathering user context, and checking with `o1-mini` to ensure the return is eligible. To test this flow, say that you'd like to return your snowboard and go through the necessary prompts!
+- [customerServiceRetail](src/app/agentConfigs/customerServiceRetail) Also guides through an authentication flow, reads a long offer from a canned script verbatim, and then walks through a complex return flow which requires looking up orders and policies, gathering user context, and checking with `o4-mini` to ensure the return is eligible. To test this flow, say that you'd like to return your snowboard and go through the necessary prompts!
 
 ### Defining your own agents
 - You can copy these to make your own multi-agent voice app! Once you make a new agent set config, add it to `src/app/agentConfigs/index.ts` and you should be able to select it in the UI in the "Scenario" dropdown menu.
