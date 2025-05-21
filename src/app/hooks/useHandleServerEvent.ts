@@ -81,7 +81,7 @@ export function useHandleServerEvent({
 
     if (currentAgent?.toolLogic?.[functionCallParams.name]) {
       const fn = currentAgent.toolLogic[functionCallParams.name];
-      const fnResult = await fn(args, transcriptItems);
+      const fnResult = await fn(args, transcriptItems, addTranscriptBreadcrumb);
       addTranscriptBreadcrumb(
         `function call result: ${functionCallParams.name}`,
         fnResult

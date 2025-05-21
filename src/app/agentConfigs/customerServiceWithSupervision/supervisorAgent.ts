@@ -176,21 +176,32 @@ function getToolResponse(fName: string) {
   }
 }
 
-async function handleToolCalls(body: any, message: any) {
+async function handleToolCalls(
+  body: any,
+  message: any,
+  addTranscriptBreadcrumb?: (title: string, data?: any) => void
+) {
   while (message.tool_calls && message.tool_calls.length > 0) {
     const toolCall = message.tool_calls[0];
     const fName = toolCall.function.name;
-    console.log(`function, name=${fName}, args=${toolCall.function.arguments}`);
+    if (addTranscriptBreadcrumb)
+      addTranscriptBreadcrumb(
+        `[supervisorAgent] function call: ${fName}`,
+        JSON.parse(toolCall.function.arguments)
+      );
     const toolRes = getToolResponse(fName);
+    if (addTranscriptBreadcrumb)
+      addTranscriptBreadcrumb(
+        `[supervisorAgent] function call result: ${fName}`,
+        toolRes
+      );
     body.messages.push(message);
     body.messages.push({
       role: "tool",
       tool_call_id: toolCall.id,
       content: JSON.stringify(toolRes),
     } as any); // hack for tool_call_id param
-    console.log("request after tool call", body);
     message = await fetchChatCompletionMessage(body);
-    console.log("response after tool call", message);
     if (message.error) {
       return { error: "Something went wrong." };
     }
@@ -223,7 +234,8 @@ export async function getNextResponse(
   {
     relevantContextFromLastUserMessage,
   }: { relevantContextFromLastUserMessage: string },
-  transcriptLogs: any[]
+  transcriptLogs: any[],
+  addTranscriptBreadcrumb?: (title: string, data?: any) => void
 ) {
   const filteredLogs = filterTranscriptLogs(transcriptLogs);
 
@@ -247,17 +259,14 @@ export async function getNextResponse(
     tools: supervisorAgentTools,
   };
 
-  console.log("********\ngetnextresponse request", body);
-
   let message = await fetchChatCompletionMessage(body);
-  console.log("ngetnextresponse response", message);
   if (message.error) {
     return { error: "Something went wrong." };
   }
 
   // Keep handling tool calls until there are none left
   while (message.tool_calls && message.tool_calls.length > 0) {
-    message = await handleToolCalls(body, message);
+    message = await handleToolCalls(body, message, addTranscriptBreadcrumb);
     if (message.error) {
       return { error: "Something went wrong." };
     }
