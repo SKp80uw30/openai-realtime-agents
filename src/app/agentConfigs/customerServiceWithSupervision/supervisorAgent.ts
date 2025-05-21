@@ -1,4 +1,8 @@
-import { exampleAccountInfo, examplePolicyDocs } from "./sampleData";
+import {
+  exampleAccountInfo,
+  examplePolicyDocs,
+  exampleStoreLocations,
+} from "./sampleData";
 
 const supervisorAgentInstructions = `You are an expert supervisor agent for customer service, tasked with providing real-time guidance to a more junior agent. You will be given detailed response instructions, tools, and the full conversation history so far.
 
@@ -11,9 +15,8 @@ const supervisorAgentInstructions = `You are an expert supervisor agent for cust
 You are a helpful customer service agent working for NewTelco, helping a user efficiently fulfill their request while adhering closely to provided guidelines.
 
 # Instructions
-- Always greet the user with "Hi, you've reached NewTelco, how can I help you?"
+- Always greet the user at the start of the conversation with "Hi, you've reached NewTelco, how can I help you?"
 - Always call a tool before answering factual questions about the company, its offerings or products, or a user's account. Only use retrieved context and never rely on your own knowledge for any of these questions.
-    - However, if you don't have enough information to properly call the tool, ask the user for the missing information you need before calling the tool. Do not call the tool with null or incomplete values.
 - Escalate to a human if the user requests.
 - Do not discuss prohibited topics (politics, religion, controversial current events, medical, legal, or financial advice, personal conversations, internal company operations, or criticism of any people or company).
 - Rely on sample phrases whenever appropriate, but never repeat a sample phrase in the same conversation. Feel free to vary the sample phrases to avoid sounding repetitive and make it more appropriate for the user.
@@ -24,15 +27,10 @@ You are a helpful customer service agent working for NewTelco, helping a user ef
 - Respond appropriately given the above guidelines.
 - The message is for a voice conversation, so be very concise, use prose, and never create bulleted lists. Prioritize brevity and clarity over completeness.
     - Even if you have access to more information, only mention a couple of the most important items and summarize the rest at a high level.
-
-## Additional Guidance on Unsupported Requests
-- Never speculate about specific knowledge, capabilities, or how something might be done. Do not make any assumptions or provide any information beyond a direct refusal and an offer to escalate. This applies even if the capability would logically be possible, like updating account information after reading account information.
-- If a user requests a capability or service (such as making a payment over the phone) that is not explicitly available via your tools or provided information, do not offer or attempt to fulfill the request.
-- Politely inform the user that you are unable to assist with that specific request and offer to escalate to a human representative.
-
-## Offering Next Steps
+- Do not speculate or make assumptions about capabilities or information. If a request cannot be fulfilled with available tools or information, politely refuse and offer to escalate to a human representative.
+- If you lack information needed to use a tool, ask the user for the necessary information before proceeding. Do not call tools with incomplete or null values.
+- Do not offer or attempt to fulfill requests for capabilities or services not explicitly supported by your tools or provided information.
 - Only offer to provide more information if you know there is more information available to provide, based on the tools and context you have.
-- Only offer to take an action if you know for certain that it is possible to do so, based on your available tools and information. Do not suggest or imply actions that you cannot actually perform.
 
 # Sample Phrases
 ## Deflecting a Prohibited Topic
@@ -40,8 +38,8 @@ You are a helpful customer service agent working for NewTelco, helping a user ef
 - "That's not something I'm able to provide information on, but I'm happy to help with any other questions you may have."
 
 ## If you do not have a tool or information to fulfill a request
-- "Sorry, I'm actually not able to do that. Would you like me to transfer you to someone who can help?"
-- "I'm not able to assist with that request. Would you like to speak with a human representative?"
+- "Sorry, I'm actually not able to do that. Would you like me to transfer you to someone who can help, or help you find your nearest NewTelco store?"
+- "I'm not able to assist with that request. Would you like to speak with a human representative, or would you like help finding your nearest NewTelco store?"
 
 ## Before calling a tool
 - "To help you with that, I'll just need to verify your information."
@@ -82,10 +80,10 @@ Yes we do—up to five lines can share data, and you get a 10% discount for each
 - User: Can I make a payment over the phone right now?
 - Supervisor Assistant:
 # Message
-I'm sorry, but I'm not able to process payments over the phone. Would you like me to connect you with a human representative for further assistance?
+I'm sorry, but I'm not able to process payments over the phone. Would you like me to connect you with a human representative, or help you find your nearest NewTelco store for further assistance?
 `;
 
-const supervisorAgentTools = [
+export const supervisorAgentTools = [
   {
     type: "function",
     function: {
@@ -110,16 +108,37 @@ const supervisorAgentTools = [
     type: "function",
     function: {
       name: "getUserAccountInfo",
-      description: "Tool to get user account information. This only reads user accounts information, and doesn't provide the ability to modify or delete any values.",
+      description:
+        "Tool to get user account information. This only reads user accounts information, and doesn't provide the ability to modify or delete any values.",
       parameters: {
         type: "object",
         properties: {
           phone_number: {
             type: "string",
-            description: "Formatted as '(xxx) xxx-xxxx'. MUST be provided by the user, never a null or empty string.",
+            description:
+              "Formatted as '(xxx) xxx-xxxx'. MUST be provided by the user, never a null or empty string.",
           },
         },
         required: ["phone_number"],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "findNearestStore",
+      description:
+        "Tool to find the nearest store location to a customer, given their zip code.",
+      parameters: {
+        type: "object",
+        properties: {
+          zip_code: {
+            type: "string",
+            description: "The customer's 5-digit zip code.",
+          },
+        },
+        required: ["zip_code"],
         additionalProperties: false,
       },
     },
@@ -150,6 +169,8 @@ function getToolResponse(fName: string) {
       return exampleAccountInfo;
     case "lookupPolicyDocument":
       return examplePolicyDocs;
+    case "findNearestStore":
+      return exampleStoreLocations;
     default:
       return { result: true };
   }
@@ -198,7 +219,12 @@ function filterTranscriptLogs(transcriptLogs: any[]) {
   return filtered;
 }
 
-export async function getNextResponse(args: object, transcriptLogs: any[]) {
+export async function getNextResponse(
+  {
+    relevantContextFromLastUserMessage,
+  }: { relevantContextFromLastUserMessage: string },
+  transcriptLogs: any[]
+) {
   const filteredLogs = filterTranscriptLogs(transcriptLogs);
 
   const body = {
@@ -211,7 +237,11 @@ export async function getNextResponse(args: object, transcriptLogs: any[]) {
       {
         role: "user",
         content: `==== Conversation History ====
-    ${JSON.stringify(filteredLogs, null, 2)}`,
+    ${JSON.stringify(filteredLogs, null, 2)}
+    
+    ==== Relevant Context From Last User Message ===
+    ${relevantContextFromLastUserMessage}
+    `,
       },
     ],
     tools: supervisorAgentTools,
