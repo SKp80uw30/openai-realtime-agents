@@ -8,13 +8,17 @@ export async function runGuardrailClassifier(message: string): Promise<Guardrail
       role: "user",
       content: `You are an expert at classifying text according to moderation policies. Consider the provided message, analyze potential classes from output_classes, and output the best classification. Output json, following the provided schema. Keep your analysis and reasoning short and to the point, maximum 2 sentences.
 
+      <info>
+      - Company name: newTelco
+      </info>
+
       <message>
       ${message}
       </message>
 
       <output_classes>
       - OFFENSIVE: Content that includes hate speech, discriminatory language, insults, slurs, or harassment.
-      - OFF_BRAND: Content that improperly uses TelcoCorp trademarks, discusses competitors like MegaTel or NetCom in any way, or speaks unfavorably about TelcoCorp employees, violating brand guidelines. Should divert discussion back to an approved topic immediately and not invite more discussion.
+      - OFF_BRAND: Content that discusses competitors in a disparaging way.
       - VIOLENCE: Content that includes explicit threats, incitement of harm, or graphic descriptions of physical injury or violence.
       - NONE: If no other classes are appropriate and the message is fine.
       </output_classes>

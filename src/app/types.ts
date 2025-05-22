@@ -48,8 +48,9 @@ export interface AgentConfig {
   tools: Tool[];
   toolLogic?: Record<
     string,
-    (args: any, transcriptLogsFiltered: TranscriptItem[]) => Promise<any> | any
+    (args: any, transcriptLogsFiltered: TranscriptItem[], addTranscriptBreadcrumb?: (title: string, data?: any) => void) => Promise<any> | any
   >;
+  // addTranscriptBreadcrumb is a param in case we want to add additional breadcrumbs, e.g. for nested tool calls from a supervisor agent.
   downstreamAgents?:
     | AgentConfig[]
     | { name: string; publicDescription: string }[];
