@@ -24,8 +24,10 @@ Here's a quick [demo video](https://x.com/OpenAIDevs/status/1880306081517432936)
 This is demonstrated in the agentConfig [chatSupervisorDemo](src/app/agentConfigs/chatSupervisorDemo/index.ts). The chat agent uses the realtime model to converse with the user and handle basic tasks, and a more intelligent, text-based supervisor model (e.g. `gpt-4.1`) is used extensively to handle all tool calls and more challenging responses. You can define the decision boundary by "opting in" specific tasks to the chat agent as desired. For the demo, the chat agent handles greeting, chitchat, and collecting necessary information for tool calls.
 
 ## Example Flow
-TODO screenshot
+![Screenshot of the Chat Supervisor Flow](/public/screenshot_chat_supervisor.png)
+*In this screenshot, note the immediate response to collect the phone number, and the deferral to the supervisor agent to handle the tool call and formulate the response. Note that there was only ~2s between the end of "give me a moment to check on that." and the start of the "Thanks for waiting. Your last bill..." message.*
 
+### Flow Schematic
 ```mermaid
 sequenceDiagram
     participant User
