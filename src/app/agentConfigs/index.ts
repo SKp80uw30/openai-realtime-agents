@@ -1,14 +1,12 @@
 import { AllAgentConfigsType } from "@/app/types";
-import frontDeskAuthentication from "./frontDeskAuthentication";
 import customerServiceRetail from "./customerServiceRetail";
-import chatSupervisorDemo from "./chatSupervisorDemo";
-import simpleExample from "./simpleExample";
+import chatSupervisor from "./chatSupervisor";
+import simpleHandoff from "./simpleHandoff";
 
 export const allAgentSets: AllAgentConfigsType = {
-  frontDeskAuthentication,
   customerServiceRetail,
-  chatSupervisorDemo,
-  simpleExample,
+  chatSupervisor,
+  simpleHandoff,
 };
 
-export const defaultAgentSetKey = "chatSupervisorDemo";
+export const defaultAgentSetKey = "chatSupervisor";
