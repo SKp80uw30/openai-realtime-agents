@@ -54,12 +54,12 @@ sequenceDiagram
 
 ## Modifying for your own agent
 1. Update [supervisorAgent](src/app/agentConfigs/chatSupervisorDemo/supervisorAgent.ts).
-  a. Add your existing text agent prompt and tools if you already have them. This should contain the "meat" of your voice agent logic and be very specific with what it should/shouldn't do and how exactly it should respond. Add this information below `==== Domain-Specific Agent Instructions ====`.
-  b. You should likely update this prompt to be more appropriate for voice, for example with instructions to be concise and avoiding long lists of items.
+  - Add your existing text agent prompt and tools if you already have them. This should contain the "meat" of your voice agent logic and be very specific with what it should/shouldn't do and how exactly it should respond. Add this information below `==== Domain-Specific Agent Instructions ====`.
+  - You should likely update this prompt to be more appropriate for voice, for example with instructions to be concise and avoiding long lists of items.
 2. Update [chatAgent](src/app/agentConfigs/chatSupervisor/index.ts).
-  a. Customize the chatAgent instructions with your own tone, greeting, etc.
-  b. Add your tool definitions to `chatAgentInstructions`. We recommend a brief yaml description rather than json to ensure the model doesn't get confused and try calling the tool directly.
-  c. You can modify the decision boundary by adding new items to the `# Allow List of Permitted Actions` section.
+  - Customize the chatAgent instructions with your own tone, greeting, etc.
+  - Add your tool definitions to `chatAgentInstructions`. We recommend a brief yaml description rather than json to ensure the model doesn't get confused and try calling the tool directly.
+  - You can modify the decision boundary by adding new items to the `# Allow List of Permitted Actions` section.
 3. To reduce cost, try using `gpt-4o-mini-realtime` for the chatAgent and/or `gpt-4.1-mini` for the supervisor model. To maximize intelligence on particularly difficult or high-stakes tasks, consider trading off latency and adding chain-of-thought to your supervisor prompt, or using an additional reasoning model-based supervisor that uses `o4-mini`.
 
 # Agentic Pattern 2: Sequential Handoffs
