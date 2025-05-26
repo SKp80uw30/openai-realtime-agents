@@ -12,13 +12,13 @@ This is a demonstration of more advanced patterns for voice agents, using the Op
 - Open your browser to [http://localhost:3000](http://localhost:3000). It should default to the `chatSupervisor` Agent Config.
 - You can change examples via the "Scenario" dropdown in the top right.
 
-# 1. Chat-Supervisor
+# Agentic Pattern 1: Chat-Supervisor
 
 This is demonstrated in the [chatSupervisor](src/app/agentConfigs/chatSupervisor/index.ts) Agent Config. The chat agent uses the realtime model to converse with the user and handle basic tasks, like greeting the user, casual conversation, and collecting information, and a more intelligent, text-based supervisor model (e.g. `gpt-4.1`) is used extensively to handle tool calls and more challenging responses. You can control the decision boundary by "opting in" specific tasks to the chat agent as desired.
 
 ## Example
 ![Screenshot of the Chat Supervisor Flow](/public/screenshot_chat_supervisor.png)
-*In this screenshot, note the immediate response to collect the phone number, and the deferral to the supervisor agent to handle the tool call and formulate the response. Note that there was only ~2s between the end of "give me a moment to check on that." and the start of the "Thanks for waiting. Your last bill..." message.*
+*In this exchange, note the immediate response to collect the phone number, and the deferral to the supervisor agent to handle the tool call and formulate the response. There ~2s between the end of "give me a moment to check on that." being spoken aloud and the start of the "Thanks for waiting. Your last bill...".*
 
 ## Schematic
 ```mermaid
@@ -54,15 +54,15 @@ sequenceDiagram
 
 ## Modifying for your own agent
 1. Update [supervisorAgent](src/app/agentConfigs/chatSupervisorDemo/supervisorAgent.ts).
-  a. Add your existing text agent prompt and tools if you already have them. This should contain the "meat" of your voice agent logic and be very specific with what it should/shouldn't do and how exactly it should respond. Add this information below `==== Domain-Specific Agent Instructions ====`.
-  b. You should likely update this prompt to be more appropriate for voice, for example with instructions to be concise and avoiding long lists of items.
+  - Add your existing text agent prompt and tools if you already have them. This should contain the "meat" of your voice agent logic and be very specific with what it should/shouldn't do and how exactly it should respond. Add this information below `==== Domain-Specific Agent Instructions ====`.
+  - You should likely update this prompt to be more appropriate for voice, for example with instructions to be concise and avoiding long lists of items.
 2. Update [chatAgent](src/app/agentConfigs/chatSupervisor/index.ts).
-  a. Customize the chatAgent instructions with your own tone, greeting, etc.
-  b. Add your tool definitions to `chatAgentInstructions`. We recommend a brief yaml description rather than json to ensure the model doesn't get confused and try calling the tool directly.
-  c. You can modify the decision boundary by adding new items to the `# Allow List of Permitted Actions` section.
+  - Customize the chatAgent instructions with your own tone, greeting, etc.
+  - Add your tool definitions to `chatAgentInstructions`. We recommend a brief yaml description rather than json to ensure the model doesn't get confused and try calling the tool directly.
+  - You can modify the decision boundary by adding new items to the `# Allow List of Permitted Actions` section.
 3. To reduce cost, try using `gpt-4o-mini-realtime` for the chatAgent and/or `gpt-4.1-mini` for the supervisor model. To maximize intelligence on particularly difficult or high-stakes tasks, consider trading off latency and adding chain-of-thought to your supervisor prompt, or using an additional reasoning model-based supervisor that uses `o4-mini`.
 
-# 2. Sequential Handoffs
+# Agentic Pattern 2: Sequential Handoffs
 
 This pattern is inspired by [OpenAI Swarm](https://github.com/openai/swarm) and involves the sequential handoff of a user between specialized agents. Handoffs are decided by the model and coordinated via tool calls, and possible handoffs are defined explicitly in an agent graph. A handoff triggers a session.update event with new instructions and tools. This pattern is effective for handling a variety of user intents with specialist agents, each of which might have long instructions and numerous tools.
 
@@ -132,7 +132,7 @@ export default agents;
 
 ## Schematic
 
-This diagram illustrates a more advanced interaction flow defined in `src/app/agentConfigs/customerServiceRetail/`.
+This diagram illustrates a more advanced interaction flow defined in `src/app/agentConfigs/customerServiceRetail/`, including detailed events.
 
 <details>
 <summary><strong>Show CustomerServiceRetail Flow Diagram</strong></summary>
