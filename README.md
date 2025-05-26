@@ -103,9 +103,32 @@ export default agents;
 
 This is a more complex, representative implementation that illustrates a customer service flow, with the following features:
 - A more complex agent graph with agents for user authentication, returns, sales, and a placeholder human agent for escalations.
-- An escalation by the [returns](src/app/agentConfigs/customerServiceRetail/returns.ts) agent to `o4-mini` to validate and initiate a return, as an example high-stakes decision, using a similar pattern to the above.
+- An escalation by the [returns](https://github.com/openai/openai-realtime-agents/blob/60f4effc50a539b19b2f1fa4c38846086b58c295/src/app/agentConfigs/customerServiceRetail/returns.ts#L233) agent to `o4-mini` to validate and initiate a return, as an example high-stakes decision, using a similar pattern to the above.
 - Prompting models to follow a state machine, for example to accurately collect things like names and phone numbers with confirmation character by character to authenticate a user.
   - To test this flow, say that you'd like to return your snowboard and go through the necessary prompts!
+
+Configuration in [src/app/agentConfigs/customerServiceRetail/index.ts](src/app/agentConfigs/customerServiceRetail/index.ts).
+```javascript
+import authentication from "./authentication";
+import returns from "./returns";
+import sales from "./sales";
+import simulatedHuman from "./simulatedHuman";
+import { injectTransferTools } from "../utils";
+
+authentication.downstreamAgents = [returns, sales, simulatedHuman];
+returns.downstreamAgents = [authentication, sales, simulatedHuman];
+sales.downstreamAgents = [authentication, returns, simulatedHuman];
+simulatedHuman.downstreamAgents = [authentication, returns, sales];
+
+const agents = injectTransferTools([
+  authentication,
+  returns,
+  sales,
+  simulatedHuman,
+]);
+
+export default agents;
+```
 
 ## Schematic
 
@@ -166,23 +189,25 @@ sequenceDiagram
 
 </details>
 
-# Next Steps
-- You can copy these to make your own multi-agent voice app! Once you make a new agent set config, add it to `src/app/agentConfigs/index.ts` and you should be able to select it in the UI in the "Scenario" dropdown menu.
+# Other Info
+## Next Steps
+- You can copy these templates to make your own multi-agent voice app! Once you make a new agent set config, add it to `src/app/agentConfigs/index.ts` and you should be able to select it in the UI in the "Scenario" dropdown menu.
+- Each agentConfig can define instructions, tools, and toolLogic. By default all tool calls simply return `True`, unless you define the toolLogic, which will run your specific tool logic and return an object to the conversation (e.g. for retrieved RAG context).
 - If you want help creating your own prompt using the conventions shown in customerServiceRetail, including defining a state machine, we've included a metaprompt [here](src/app/agentConfigs/voiceAgentMetaprompt.txt), or you can use our [Voice Agent Metaprompter GPT](https://chatgpt.com/g/g-678865c9fb5c81918fa28699735dd08e-voice-agent-metaprompt-gpt)
 
-# Output Guardrails
+## Output Guardrails
 Assistant messages are checked for safety and compliance using a guardrail function before being finalized in the transcript. This is implemented in [`src/app/hooks/useHandleServerEvent.ts`](src/app/hooks/useHandleServerEvent.ts) as the `processGuardrail` function, which is invoked on each assistant message (after every 5 incremental words received) to run a moderation/classification check. You can review or customize this logic by editing the `processGuardrail` function definition and its invocation inside `useHandleServerEvent`.
 
-# Navigating the UI
+## Navigating the UI
 - You can select agent scenarios in the Scenario dropdown, and automatically switch to a specific agent with the Agent dropdown.
 - The conversation transcript is on the left, including tool calls, tool call responses, and agent changes. Click to expand non-message elements.
 - The event log is on the right, showing both client and server events. Click to see the full payload.
 - On the bottom, you can disconnect, toggle between automated voice-activity detection or PTT, turn off audio playback, and toggle logs.
 
-# Pull Requests
+## Pull Requests
 
 Feel free to open an issue or pull request and we'll do our best to review it. The spirit of this repo is to demonstrate the core logic for new agentic flows; PRs that go beyond this core scope will likely not be merged.
 
-## Core Contributors
+# Core Contributors
 - Noah MacCallum - [noahmacca](https://x.com/noahmacca)
 - Ilan Bigio - [ibigio](https://github.com/ibigio)
