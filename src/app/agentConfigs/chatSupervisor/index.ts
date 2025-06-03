@@ -1,7 +1,10 @@
-import { AgentConfig } from "@/app/types";
-import { getNextResponseFromSupervisor } from "./supervisorAgent";
+import { RealtimeAgent } from '@openai/agents/realtime'
+import { getNextResponseFromSupervisor } from './supervisorAgent';
 
-const chatAgentInstructions = `
+export const chatAgent = new RealtimeAgent({
+  name: 'chatAgent',
+  voice: 'sage',
+  instructions: `
 You are a helpful junior customer service agent. Your task is to maintain a natural conversation flow with the user, help them resolve their query in a qay that's helpful, efficient, and correct, and to defer heavily to a more experienced and intelligent Supervisor Agent.
 
 # General Instructions
@@ -103,37 +106,12 @@ findNearestStore:
 - getNextResponseFromSupervisor(relevantContextFromLastUserMessage="Wants to know what their current plan includes")
   - getNextResponseFromSupervisor(): "# Message\nYour current plan includes unlimited talk and text, plus 10GB of data per month. Would you like more details or information about upgrading?"
 - Assistant: "Your current plan includes unlimited talk and text, plus 10GB of data per month. Would you like more details or information about upgrading?"
-`;
-
-const chatAgent: AgentConfig = {
-  name: "chatAgent",
-  publicDescription: "Customer service chat agent for NewTelco.",
-  instructions: chatAgentInstructions,
+`,
   tools: [
-    {
-      type: "function",
-      name: "getNextResponseFromSupervisor",
-      description:
-        "Determines the next response whenever the agent faces a non-trivial decision, produced by a highly intelligent supervisor agent. Returns a message describing what to do next.",
-      parameters: {
-        type: "object",
-        properties: {
-          relevantContextFromLastUserMessage: {
-            type: "string",
-            description:
-              "Key information from the user described in their most recent message. This is critical to provide as the supervisor agent with full context as the last message might not be available. Okay to omit if the user message didn't add any new information.",
-          }, // Last message transcript can arrive after the tool call, in which case this is the only way to provide the supervisor with this context.
-        },
-        additionalProperties: false,
-      },
-    },
-  ],
-  toolLogic: {
     getNextResponseFromSupervisor,
-  },
-  downstreamAgents: [],
-};
+  ],
+});
 
-const agents = [chatAgent];
+export const chatSupervisorScenario = [chatAgent];
 
-export default agents;
+export default chatSupervisorScenario;

@@ -1,6 +1,10 @@
 # Realtime API Agents Demo
 
-This is a demonstration of more advanced patterns for voice agents, using the OpenAI Realtime API. There are two main patterns demonstrated:
+This is a demonstration of more advanced patterns for voice agents, using the OpenAI Realtime API and the OpenAI Agents SDK. 
+
+** NOTE:** For a version that does not use the OpenAI Agents SDK, see the [branch without-agents-sdk](https://github.com/openai/openai-realtime-agents/tree/without-agents-sdk).
+
+There are two main patterns demonstrated:
 1. **Chat-Supervisor:** A realtime-based chat agent interacts with the user and handles basic tasks, while a more intelligent, text-based supervisor model (e.g., `gpt-4.1`) is used extensively for tool calls and more complex responses. This approach provides an easy onramp and high-quality answers, with a small increase in latency.
 2. **Sequential Handoff:** Specialized agents (powered by realtime api) transfer the user between them to handle specific user intents. This is great for customer service, where user intents can be handled sequentially by specialist models that excel in a specific domains. This helps avoid the model having all instructions and tools in a single agent, which can degrade performance.
 
@@ -74,32 +78,30 @@ Here's a [video walkthrough](https://x.com/OpenAIDevs/status/1880306081517432936
 *In this simple example, the user is transferred from a greeter agent to a haiku agent. See below for the simple, full configuration of this flow.*
 
 Configuration in `src/app/agentConfigs/simpleExample.ts`
-```javascript
-import { AgentConfig } from "@/app/types";
-import { injectTransferTools } from "./utils";
+```typescript
+import { RealtimeAgent } from '@openai/agents/realtime';
 
-// Define agents
-const haikuWriter: AgentConfig = {
-  name: "haikuWriter",
-  publicDescription: "Agent that writes haikus.", // Context for the agent_transfer tool
+// Define agents using the OpenAI Agents SDK
+export const haikuWriterAgent = new RealtimeAgent({
+  name: 'haikuWriter',
+  handoffDescription: 'Agent that writes haikus.', // Context for the agent_transfer tool
   instructions:
-    "Ask the user for a topic, then reply with a haiku about that topic.",
+    'Ask the user for a topic, then reply with a haiku about that topic.',
   tools: [],
-};
+  handoffs: [],
+});
 
-const greeter: AgentConfig = {
-  name: "greeter",
-  publicDescription: "Agent that greets the user.",
+export const greeterAgent = new RealtimeAgent({
+  name: 'greeter',
+  handoffDescription: 'Agent that greets the user.',
   instructions:
-    "Please greet the user and ask them if they'd like a Haiku. If yes, transfer them to the 'haiku' agent.",
+    "Please greet the user and ask them if they'd like a haiku. If yes, hand off to the 'haikuWriter' agent.",
   tools: [],
-  downstreamAgents: [haikuWriter],
-};
+  handoffs: [haikuWriterAgent], // Define which agents this agent can hand off to
+});
 
-// add the transfer tool to point to downstreamAgents
-const agents = injectTransferTools([greeter, haikuWriter]);
-
-export default agents;
+// An Agent Set is just an array of the agents that participate in the scenario
+export default [greeterAgent, haikuWriterAgent];
 ```
 ## CustomerServiceRetail Flow
 
@@ -198,7 +200,7 @@ sequenceDiagram
 - If you want help creating your own prompt using the conventions shown in customerServiceRetail, including defining a state machine, we've included a metaprompt [here](src/app/agentConfigs/voiceAgentMetaprompt.txt), or you can use our [Voice Agent Metaprompter GPT](https://chatgpt.com/g/g-678865c9fb5c81918fa28699735dd08e-voice-agent-metaprompt-gpt)
 
 ## Output Guardrails
-Assistant messages are checked for safety and compliance using a guardrail function before being finalized in the transcript. This is implemented in [`src/app/hooks/useHandleServerEvent.ts`](src/app/hooks/useHandleServerEvent.ts) as the `processGuardrail` function, which is invoked on each assistant message (after every 5 incremental words received) to run a moderation/classification check. You can review or customize this logic by editing the `processGuardrail` function definition and its invocation inside `useHandleServerEvent`.
+Assistant messages are checked for safety and compliance before they are shown in the UI.  The guardrail call now lives directly inside `src/app/App.tsx`: when a `response.text.delta` stream starts we mark the message as **IN_PROGRESS**, and once the server emits `guardrail_tripped` or `response.done` we mark the message as **FAIL** or **PASS** respectively.  If you want to change how moderation is triggered or displayed, search for `guardrail_tripped` inside `App.tsx` and tweak the logic there.
 
 ## Navigating the UI
 - You can select agent scenarios in the Scenario dropdown, and automatically switch to a specific agent with the Agent dropdown.
@@ -213,3 +215,4 @@ Feel free to open an issue or pull request and we'll do our best to review it. T
 # Core Contributors
 - Noah MacCallum - [noahmacca](https://x.com/noahmacca)
 - Ilan Bigio - [ibigio](https://github.com/ibigio)
+- Brian Fioca - [bfioca](https://github.com/bfioca)

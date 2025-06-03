@@ -1,19 +1,19 @@
-import authentication from "./authentication";
-import returns from "./returns";
-import sales from "./sales";
-import simulatedHuman from "./simulatedHuman";
-import { injectTransferTools } from "../utils";
+import { authenticationAgent } from './authentication';
+import { returnsAgent } from './returns';
+import { salesAgent } from './sales';
+import { simulatedHumanAgent } from './simulatedHuman';
 
-authentication.downstreamAgents = [returns, sales, simulatedHuman];
-returns.downstreamAgents = [authentication, sales, simulatedHuman];
-sales.downstreamAgents = [authentication, returns, simulatedHuman];
-simulatedHuman.downstreamAgents = [authentication, returns, sales];
+// Cast to `any` to satisfy TypeScript until the core types make RealtimeAgent
+// assignable to `Agent<unknown>` (current library versions are invariant on
+// the context type).
+(authenticationAgent.handoffs as any).push(returnsAgent, salesAgent, simulatedHumanAgent);
+(returnsAgent.handoffs as any).push(authenticationAgent, salesAgent, simulatedHumanAgent);
+(salesAgent.handoffs as any).push(authenticationAgent, returnsAgent, simulatedHumanAgent);
+(simulatedHumanAgent.handoffs as any).push(authenticationAgent, returnsAgent, salesAgent);
 
-const agents = injectTransferTools([
-  authentication,
-  returns,
-  sales,
-  simulatedHuman,
-]);
-
-export default agents;
+export const customerServiceRetailScenario = [
+  authenticationAgent,
+  returnsAgent,
+  salesAgent,
+  simulatedHumanAgent,
+];

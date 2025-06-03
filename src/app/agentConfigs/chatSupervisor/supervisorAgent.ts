@@ -1,10 +1,13 @@
+import { RealtimeItem, tool } from '@openai/agents/realtime';
+
+
 import {
   exampleAccountInfo,
   examplePolicyDocs,
   exampleStoreLocations,
-} from "./sampleData";
+} from './sampleData';
 
-const supervisorAgentInstructions = `You are an expert customer service supervisor agent, tasked with providing real-time guidance to a more junior agent that's chatting directly with the customer. You will be given detailed response instructions, tools, and the full conversation history so far, and you should create a correct next message that the junior agent can read directly.
+export const supervisorAgentInstructions = `You are an expert customer service supervisor agent, tasked with providing real-time guidance to a more junior agent that's chatting directly with the customer. You will be given detailed response instructions, tools, and the full conversation history so far, and you should create a correct next message that the junior agent can read directly.
 
 # Instructions
 - You can provide an answer directly, or call a tool first and then answer the question
@@ -91,81 +94,76 @@ I'm sorry, but I'm not able to process payments over the phone. Would you like m
 export const supervisorAgentTools = [
   {
     type: "function",
-    function: {
-      name: "lookupPolicyDocument",
-      description:
-        "Tool to look up internal documents and policies by topic or keyword.",
-      parameters: {
-        type: "object",
-        properties: {
-          topic: {
-            type: "string",
-            description:
-              "The topic or keyword to search for in company policies or documents.",
-          },
+    name: "lookupPolicyDocument",
+    description:
+      "Tool to look up internal documents and policies by topic or keyword.",
+    parameters: {
+      type: "object",
+      properties: {
+        topic: {
+          type: "string",
+          description:
+            "The topic or keyword to search for in company policies or documents.",
         },
-        required: ["topic"],
-        additionalProperties: false,
       },
+      required: ["topic"],
+      additionalProperties: false,
     },
   },
   {
     type: "function",
-    function: {
-      name: "getUserAccountInfo",
-      description:
-        "Tool to get user account information. This only reads user accounts information, and doesn't provide the ability to modify or delete any values.",
-      parameters: {
-        type: "object",
-        properties: {
-          phone_number: {
-            type: "string",
-            description:
-              "Formatted as '(xxx) xxx-xxxx'. MUST be provided by the user, never a null or empty string.",
-          },
+    name: "getUserAccountInfo",
+    description:
+      "Tool to get user account information. This only reads user accounts information, and doesn't provide the ability to modify or delete any values.",
+    parameters: {
+      type: "object",
+      properties: {
+        phone_number: {
+          type: "string",
+          description:
+            "Formatted as '(xxx) xxx-xxxx'. MUST be provided by the user, never a null or empty string.",
         },
-        required: ["phone_number"],
-        additionalProperties: false,
       },
+      required: ["phone_number"],
+      additionalProperties: false,
     },
   },
   {
     type: "function",
-    function: {
-      name: "findNearestStore",
-      description:
-        "Tool to find the nearest store location to a customer, given their zip code.",
-      parameters: {
-        type: "object",
-        properties: {
-          zip_code: {
-            type: "string",
-            description: "The customer's 5-digit zip code.",
-          },
+    name: "findNearestStore",
+    description:
+      "Tool to find the nearest store location to a customer, given their zip code.",
+    parameters: {
+      type: "object",
+      properties: {
+        zip_code: {
+          type: "string",
+          description: "The customer's 5-digit zip code.",
         },
-        required: ["zip_code"],
-        additionalProperties: false,
       },
+      required: ["zip_code"],
+      additionalProperties: false,
     },
   },
 ];
 
-async function fetchChatCompletionMessage(body: any) {
-  const response = await fetch("/api/chat/completions", {
-    method: "POST",
+async function fetchResponsesMessage(body: any) {
+  const response = await fetch('/api/responses', {
+    method: 'POST',
     headers: {
-      "Content-Type": "application/json",
+      'Content-Type': 'application/json',
     },
+    // Preserve the previous behaviour of forcing sequential tool calls.
     body: JSON.stringify({ ...body, parallel_tool_calls: false }),
   });
 
   if (!response.ok) {
-    console.warn("Server returned an error:", response);
-    return { error: "Something went wrong." };
+    console.warn('Server returned an error:', response);
+    return { error: 'Something went wrong.' };
   }
 
   const completion = await response.json();
-  return completion.choices[0].message;
+  return completion;
 }
 
 function getToolResponse(fName: string) {
@@ -181,100 +179,141 @@ function getToolResponse(fName: string) {
   }
 }
 
+/**
+ * Iteratively handles function calls returned by the Responses API until the
+ * assistant produces a final textual answer. Returns that answer as a string.
+ */
 async function handleToolCalls(
   body: any,
-  message: any,
-  addTranscriptBreadcrumb?: (title: string, data?: any) => void
+  response: any,
+  addBreadcrumb?: (title: string, data?: any) => void,
 ) {
-  while (message.tool_calls && message.tool_calls.length > 0) {
-    const toolCall = message.tool_calls[0];
-    const fName = toolCall.function.name;
-    if (addTranscriptBreadcrumb)
-      addTranscriptBreadcrumb(
-        `[supervisorAgent] function call: ${fName}`,
-        JSON.parse(toolCall.function.arguments)
+  let currentResponse = response;
+
+  while (true) {
+    if (currentResponse?.error) {
+      return { error: 'Something went wrong.' } as any;
+    }
+
+    const outputItems: any[] = currentResponse.output ?? [];
+
+    // Gather all function calls in the output.
+    const functionCalls = outputItems.filter((item) => item.type === 'function_call');
+
+    if (functionCalls.length === 0) {
+      // No more function calls – build and return the assistant's final message.
+      const assistantMessages = outputItems.filter((item) => item.type === 'message');
+
+      const finalText = assistantMessages
+        .map((msg: any) => {
+          const contentArr = msg.content ?? [];
+          return contentArr
+            .filter((c: any) => c.type === 'output_text')
+            .map((c: any) => c.text)
+            .join('');
+        })
+        .join('\n');
+
+      return finalText;
+    }
+
+    // For each function call returned by the model, execute it locally and append its
+    // output to the request body as a `function_call_output` item.
+    for (const toolCall of functionCalls) {
+      const fName = toolCall.name;
+      const args = JSON.parse(toolCall.arguments || '{}');
+
+      if (addBreadcrumb) {
+        addBreadcrumb(`[supervisorAgent] function call: ${fName}`, args);
+      }
+
+      const toolRes = getToolResponse(fName);
+
+      if (addBreadcrumb) {
+        addBreadcrumb(`[supervisorAgent] function call result: ${fName}`, toolRes);
+      }
+
+      body.input.push(
+        {
+          type: 'function_call',
+          call_id: toolCall.call_id,
+          name: toolCall.name,
+          arguments: toolCall.arguments,
+        },
+        {
+          type: 'function_call_output',
+          call_id: toolCall.call_id,
+          output: JSON.stringify(toolRes),
+        },
       );
-    const toolRes = getToolResponse(fName);
-    if (addTranscriptBreadcrumb)
-      addTranscriptBreadcrumb(
-        `[supervisorAgent] function call result: ${fName}`,
-        toolRes
-      );
-    body.messages.push(message);
-    body.messages.push({
-      role: "tool",
-      tool_call_id: toolCall.id,
-      content: JSON.stringify(toolRes),
-    } as any); // hack for tool_call_id param
-    message = await fetchChatCompletionMessage(body);
-    if (message.error) {
-      return { error: "Something went wrong." };
     }
+
+    // Make the follow-up request including the tool outputs.
+    currentResponse = await fetchResponsesMessage(body);
   }
-  return message;
 }
 
-function filterTranscriptLogs(transcriptLogs: any[]) {
-  // Remove the first two BREADCRUMB items only
-  let breadcrumbCount = 0;
-  const filtered = [];
-  for (const item of transcriptLogs) {
-    if (item.type === "BREADCRUMB" && breadcrumbCount < 2) {
-      breadcrumbCount++;
-      continue;
-    }
-    if (item.type === "MESSAGE") {
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const { guardrailResult, expanded, ...rest } = item;
-      filtered.push(rest);
-    } else {
-      filtered.push(item);
-    }
-  }
-  return filtered;
-}
-
-export async function getNextResponseFromSupervisor(
-  {
-    relevantContextFromLastUserMessage,
-  }: { relevantContextFromLastUserMessage: string },
-  transcriptLogs: any[],
-  addTranscriptBreadcrumb?: (title: string, data?: any) => void
-) {
-  const filteredLogs = filterTranscriptLogs(transcriptLogs);
-
-  const body = {
-    model: "gpt-4.1",
-    messages: [
-      {
-        role: "system",
-        content: supervisorAgentInstructions,
+export const getNextResponseFromSupervisor = tool({
+  name: 'getNextResponseFromSupervisor',
+  description:
+    'Determines the next response whenever the agent faces a non-trivial decision, produced by a highly intelligent supervisor agent. Returns a message describing what to do next.',
+  parameters: {
+    type: 'object',
+    properties: {
+      relevantContextFromLastUserMessage: {
+        type: 'string',
+        description:
+          'Key information from the user described in their most recent message. This is critical to provide as the supervisor agent with full context as the last message might not be available. Okay to omit if the user message didn\'t add any new information.',
       },
-      {
-        role: "user",
-        content: `==== Conversation History ====
-    ${JSON.stringify(filteredLogs, null, 2)}
-    
-    ==== Relevant Context From Last User Message ===
-    ${relevantContextFromLastUserMessage}
-    `,
-      },
-    ],
-    tools: supervisorAgentTools,
-  };
+    },
+    required: ['relevantContextFromLastUserMessage'],
+    additionalProperties: false,
+  },
+  execute: async (input, details) => {
+    const { relevantContextFromLastUserMessage } = input as {
+      relevantContextFromLastUserMessage: string;
+    };
 
-  let message = await fetchChatCompletionMessage(body);
-  if (message.error) {
-    return { error: "Something went wrong." };
-  }
+    const addBreadcrumb = (details?.context as any)?.addTranscriptBreadcrumb as
+      | ((title: string, data?: any) => void)
+      | undefined;
 
-  // Keep handling tool calls until there are none left
-  while (message.tool_calls && message.tool_calls.length > 0) {
-    message = await handleToolCalls(body, message, addTranscriptBreadcrumb);
-    if (message.error) {
-      return { error: "Something went wrong." };
+    const history: RealtimeItem[] = (details?.context as any)?.history ?? [];
+    const filteredLogs = history.filter((log) => log.type === 'message');
+
+    const body: any = {
+      model: 'gpt-4.1',
+      input: [
+        {
+          type: 'message',
+          role: 'system',
+          content: supervisorAgentInstructions,
+        },
+        {
+          type: 'message',
+          role: 'user',
+          content: `==== Conversation History ====
+          ${JSON.stringify(filteredLogs, null, 2)}
+          
+          ==== Relevant Context From Last User Message ===
+          ${relevantContextFromLastUserMessage}
+          `,
+        },
+      ],
+      tools: supervisorAgentTools,
+    };
+
+    let response = await fetchResponsesMessage(body);
+    if (response.error) {
+      return { error: 'Something went wrong.' };
     }
-  }
 
-  return { nextResponse: message.content };
-}
+    const finalText = await handleToolCalls(body, response, addBreadcrumb);
+    if ((finalText as any)?.error) {
+      return { error: 'Something went wrong.' };
+    }
+
+    return { nextResponse: finalText as string };
+  },
+});
+  

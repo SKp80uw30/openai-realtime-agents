@@ -1,15 +1,16 @@
-import { zodResponseFormat } from "openai/helpers/zod";
-import { GuardrailOutputZod, GuardrailOutput } from "@/app/types";
+import { zodTextFormat } from 'openai/helpers/zod';
+import { GuardrailOutputZod, GuardrailOutput } from '@/app/types';
 
-
-export async function runGuardrailClassifier(message: string): Promise<GuardrailOutput> {
+export async function runGuardrailClassifier(
+  message: string,
+): Promise<GuardrailOutput> {
   const messages = [
     {
-      role: "user",
+      role: 'user',
       content: `You are an expert at classifying text according to moderation policies. Consider the provided message, analyze potential classes from output_classes, and output the best classification. Output json, following the provided schema. Keep your analysis and reasoning short and to the point, maximum 2 sentences.
 
       <info>
-      - Company name: newTelco
+      - Company name: newTelco, or Snowy Peak Boards
       </info>
 
       <message>
@@ -26,32 +27,32 @@ export async function runGuardrailClassifier(message: string): Promise<Guardrail
     },
   ];
 
-  const response = await fetch("/api/chat/completions", {
-    method: "POST",
+  const response = await fetch('/api/responses', {
+    method: 'POST',
     headers: {
-      "Content-Type": "application/json",
+      'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      model: "gpt-4o-mini",
-      messages,
-      response_format: zodResponseFormat(GuardrailOutputZod, "output_format"),
+      model: 'gpt-4o-mini',
+      input: messages,
+      text: {
+        format: zodTextFormat(GuardrailOutputZod, 'output_format'),
+      },
     }),
   });
 
   if (!response.ok) {
-    console.warn("Server returned an error:", response);
-    return Promise.reject("Error with runGuardrailClassifier.");
+    console.warn('Server returned an error:', response);
+    return Promise.reject('Error with runGuardrailClassifier.');
   }
 
   const data = await response.json();
 
   try {
-    // Parse the message content as JSON and validate it using the GuardrailOutput schema.
-    const parsedContent = JSON.parse(data.choices[0].message.content);
-    const output = GuardrailOutputZod.parse(parsedContent);
+    const output = GuardrailOutputZod.parse(data.output_parsed);
     return output;
   } catch (error) {
-    console.error("Error parsing the message content as GuardrailOutput:", error);
-    return Promise.reject("Failed to parse guardrail output.");
+    console.error('Error parsing the message content as GuardrailOutput:', error);
+    return Promise.reject('Failed to parse guardrail output.');
   }
 }

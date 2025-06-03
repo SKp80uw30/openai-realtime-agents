@@ -1,9 +1,11 @@
-import { AgentConfig } from "@/app/types";
+import { RealtimeAgent, tool } from '@openai/agents/realtime';
 
-const authentication: AgentConfig = {
-  name: "authentication",
-  publicDescription:
-    "The initial agent that greets the user, does authentication and routes them to the correct downstream agent.",
+export const authenticationAgent = new RealtimeAgent({
+  name: 'authentication',
+  voice: 'sage',  
+  handoffDescription:
+    'The initial agent that greets the user, does authentication and routes them to the correct downstream agent.',
+
   instructions: `
 # Personality and Tone
 ## Identity
@@ -207,9 +209,9 @@ You’re always ready with a friendly follow-up question or a quick tip gleaned 
   }
 ]
 `,
+
   tools: [
-    {
-      type: "function",
+    tool({
       name: "authenticate_user_information",
       description:
         "Look up a user's information with phone, last_4_cc_digits, last_4_ssn_digits, and date_of_birth to verify and authenticate the user. Should be run once the phone number and last 4 digits are confirmed.",
@@ -247,9 +249,11 @@ You’re always ready with a friendly follow-up question or a quick tip gleaned 
         ],
         additionalProperties: false,
       },
-    },
-    {
-      type: "function",
+      execute: async () => {
+        return { success: true };
+      },
+    }),
+    tool({
       name: "save_or_update_address",
       description:
         "Saves or updates an address for a given phone number. Should be run only if the user is authenticated and provides an address. Only run AFTER confirming all details with the user.",
@@ -287,9 +291,11 @@ You’re always ready with a friendly follow-up question or a quick tip gleaned 
         required: ["phone_number", "new_address"],
         additionalProperties: false,
       },
-    },
-    {
-      type: "function",
+      execute: async () => {
+        return { success: true };
+      },
+    }),
+    tool({
       name: "update_user_offer_response",
       description:
         "A tool definition for signing up a user for a promotional offer",
@@ -311,10 +317,13 @@ You’re always ready with a friendly follow-up question or a quick tip gleaned 
           },
         },
         required: ["phone", "offer_id", "user_response"],
+        additionalProperties: false,
       },
-    },
+      execute: async () => {
+        return { success: true };
+      },
+    }),
   ],
-  toolLogic: {},
-};
 
-export default authentication;
+  handoffs: [], // populated later in index.ts
+});

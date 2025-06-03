@@ -1,25 +1,25 @@
-import { AgentConfig } from "@/app/types";
-import { injectTransferTools } from "./utils";
+import {
+  RealtimeAgent,
+} from '@openai/agents/realtime';
 
-// Define agents
-const haikuWriter: AgentConfig = {
-  name: "haikuWriter",
-  publicDescription: "Agent that writes haikus.", // Context for the agent_transfer tool
+export const haikuWriterAgent = new RealtimeAgent({
+  name: 'haikuWriter',
+  voice: 'sage',
   instructions:
-    "Ask the user for a topic, then reply with a haiku about that topic.",
+    'Ask the user for a topic, then reply with a haiku about that topic.',
+  handoffs: [],
   tools: [],
-};
+  handoffDescription: 'Agent that writes haikus',
+});
 
-const greeter: AgentConfig = {
-  name: "greeter",
-  publicDescription: "Agent that greets the user.",
+export const greeterAgent = new RealtimeAgent({
+  name: 'greeter',
+  voice: 'sage',
   instructions:
-    "Please greet the user and ask them if they'd like a Haiku. If yes, transfer them to the 'haiku' agent.",
+    "Please greet the user and ask them if they'd like a Haiku. If yes, hand off to the 'haiku' agent.",
+  handoffs: [haikuWriterAgent],
   tools: [],
-  downstreamAgents: [haikuWriter],
-};
+  handoffDescription: 'Agent that greets the user',
+});
 
-// add the transfer tool to point to downstreamAgents
-const agents = injectTransferTools([greeter, haikuWriter]);
-
-export default agents;
+export const simpleHandoffScenario = [greeterAgent, haikuWriterAgent];
