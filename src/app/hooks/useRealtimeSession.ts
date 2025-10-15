@@ -111,20 +111,25 @@ export function useRealtimeSession(callbacks: RealtimeSessionCallbacks = {}) {
       });
     };
 
-    const agentToolStartListener = (...args: any[]) => {
-      historyHandlersRef.current.handleAgentToolStart(...args);
+    const agentToolStartListener = (details: any, agent: any, functionCall: any) => {
+      historyHandlersRef.current.handleAgentToolStart(details, agent, functionCall);
     };
-    const agentToolEndListener = (...args: any[]) => {
-      historyHandlersRef.current.handleAgentToolEnd(...args);
+    const agentToolEndListener = (
+      details: any,
+      agent: any,
+      functionCall: any,
+      result: any,
+    ) => {
+      historyHandlersRef.current.handleAgentToolEnd(details, agent, functionCall, result);
     };
-    const historyUpdatedListener = (...args: any[]) => {
-      historyHandlersRef.current.handleHistoryUpdated(...args);
+    const historyUpdatedListener = (items: any[]) => {
+      historyHandlersRef.current.handleHistoryUpdated(items);
     };
-    const historyAddedListener = (...args: any[]) => {
-      historyHandlersRef.current.handleHistoryAdded(...args);
+    const historyAddedListener = (item: any) => {
+      historyHandlersRef.current.handleHistoryAdded(item);
     };
-    const guardrailListener = (...args: any[]) => {
-      historyHandlersRef.current.handleGuardrailTripped(...args);
+    const guardrailListener = (details: any, agent: any, guardrail: any) => {
+      historyHandlersRef.current.handleGuardrailTripped(details, agent, guardrail);
     };
 
     session.on('error', errorListener);

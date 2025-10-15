@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { Client } from "@modelcontextprotocol/sdk/client";
-import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp";
+import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 
 import type { McpServerHeader, McpToolSummary } from "@/app/types/mcp";
 
