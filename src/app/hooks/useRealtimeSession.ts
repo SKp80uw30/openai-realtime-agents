@@ -41,21 +41,21 @@ export function useRealtimeSession(callbacks: RealtimeSessionCallbacks = {}) {
 
   const { logServerEvent } = useEvent();
 
-  const historyHandlers = useHandleSessionHistory().current;
+  const historyHandlersRef = useHandleSessionHistory();
 
-  function handleTransportEvent(event: any) {
+  const handleTransportEvent = useCallback((event: any) => {
     // Handle additional server events that aren't managed by the session
     switch (event.type) {
       case "conversation.item.input_audio_transcription.completed": {
-        historyHandlers.handleTranscriptionCompleted(event);
+        historyHandlersRef.current.handleTranscriptionCompleted(event);
         break;
       }
       case "response.audio_transcript.done": {
-        historyHandlers.handleTranscriptionCompleted(event);
+        historyHandlersRef.current.handleTranscriptionCompleted(event);
         break;
       }
       case "response.audio_transcript.delta": {
-        historyHandlers.handleTranscriptionDelta(event);
+        historyHandlersRef.current.handleTranscriptionDelta(event);
         break;
       }
       default: {
@@ -63,7 +63,7 @@ export function useRealtimeSession(callbacks: RealtimeSessionCallbacks = {}) {
         break;
       } 
     }
-  }
+  }, [historyHandlersRef, logServerEvent]);
 
   const codecParamRef = useRef<string>(
     (typeof window !== 'undefined'
@@ -78,35 +78,75 @@ export function useRealtimeSession(callbacks: RealtimeSessionCallbacks = {}) {
     [],
   );
 
-  const handleAgentHandoff = (item: any) => {
-    const history = item.context.history;
-    const lastMessage = history[history.length - 1];
-    const agentName = lastMessage.name.split("transfer_to_")[1];
-    callbacks.onAgentHandoff?.(agentName);
-  };
+  const handleAgentHandoff = useCallback((item: any) => {
+    const history = Array.isArray(item?.context?.history)
+      ? item.context.history
+      : [];
+
+    for (let i = history.length - 1; i >= 0; i -= 1) {
+      const name = history[i]?.name;
+      if (typeof name === 'string' && name.startsWith('transfer_to_')) {
+        const agentName = name.slice('transfer_to_'.length);
+        if (agentName) {
+          callbacks.onAgentHandoff?.(agentName);
+        }
+        return;
+      }
+    }
+
+    logServerEvent({
+      type: 'agent_handoff_unparsed',
+      payload: item,
+    });
+  }, [callbacks, logServerEvent]);
 
   useEffect(() => {
-    if (sessionRef.current) {
-      // Log server errors
-      sessionRef.current.on("error", (...args: any[]) => {
-        logServerEvent({
-          type: "error",
-          message: args[0],
-        });
+    const session = sessionRef.current;
+    if (!session) return;
+
+    const errorListener = (...args: any[]) => {
+      logServerEvent({
+        type: 'error',
+        message: args[0],
       });
+    };
 
-      // history events
-      sessionRef.current.on("agent_handoff", handleAgentHandoff);
-      sessionRef.current.on("agent_tool_start", historyHandlers.handleAgentToolStart);
-      sessionRef.current.on("agent_tool_end", historyHandlers.handleAgentToolEnd);
-      sessionRef.current.on("history_updated", historyHandlers.handleHistoryUpdated);
-      sessionRef.current.on("history_added", historyHandlers.handleHistoryAdded);
-      sessionRef.current.on("guardrail_tripped", historyHandlers.handleGuardrailTripped);
+    const agentToolStartListener = (...args: any[]) => {
+      historyHandlersRef.current.handleAgentToolStart(...args);
+    };
+    const agentToolEndListener = (...args: any[]) => {
+      historyHandlersRef.current.handleAgentToolEnd(...args);
+    };
+    const historyUpdatedListener = (...args: any[]) => {
+      historyHandlersRef.current.handleHistoryUpdated(...args);
+    };
+    const historyAddedListener = (...args: any[]) => {
+      historyHandlersRef.current.handleHistoryAdded(...args);
+    };
+    const guardrailListener = (...args: any[]) => {
+      historyHandlersRef.current.handleGuardrailTripped(...args);
+    };
 
-      // additional transport events
-      sessionRef.current.on("transport_event", handleTransportEvent);
-    }
-  }, [sessionRef.current]);
+    session.on('error', errorListener);
+    session.on('agent_handoff', handleAgentHandoff);
+    session.on('agent_tool_start', agentToolStartListener);
+    session.on('agent_tool_end', agentToolEndListener);
+    session.on('history_updated', historyUpdatedListener);
+    session.on('history_added', historyAddedListener);
+    session.on('guardrail_tripped', guardrailListener);
+    session.on('transport_event', handleTransportEvent);
+
+    return () => {
+      session.off('error', errorListener);
+      session.off('agent_handoff', handleAgentHandoff);
+      session.off('agent_tool_start', agentToolStartListener);
+      session.off('agent_tool_end', agentToolEndListener);
+      session.off('history_updated', historyUpdatedListener);
+      session.off('history_added', historyAddedListener);
+      session.off('guardrail_tripped', guardrailListener);
+      session.off('transport_event', handleTransportEvent);
+    };
+  }, [handleAgentHandoff, handleTransportEvent, historyHandlersRef, logServerEvent]);
 
   const connect = useCallback(
     async ({

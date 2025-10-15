@@ -9,9 +9,11 @@ import Image from "next/image";
 import Transcript from "./components/Transcript";
 import Events from "./components/Events";
 import BottomToolbar from "./components/BottomToolbar";
+import McpManager from "./components/McpManager";
 
 // Types
 import { SessionStatus } from "@/app/types";
+import type { McpServerConfig, McpServerRequestPayload } from "@/app/types/mcp";
 import type { RealtimeAgent } from '@openai/agents/realtime';
 
 // Context providers & hooks
@@ -21,18 +23,27 @@ import { useRealtimeSession } from "./hooks/useRealtimeSession";
 import { createModerationGuardrail } from "@/app/agentConfigs/guardrails";
 
 // Agent configs
-import { allAgentSets, defaultAgentSetKey } from "@/app/agentConfigs";
+import { allAgentSets, agentSetLabels, defaultAgentSetKey } from "@/app/agentConfigs";
 import { customerServiceRetailScenario } from "@/app/agentConfigs/customerServiceRetail";
 import { chatSupervisorScenario } from "@/app/agentConfigs/chatSupervisor";
 import { customerServiceRetailCompanyName } from "@/app/agentConfigs/customerServiceRetail";
 import { chatSupervisorCompanyName } from "@/app/agentConfigs/chatSupervisor";
 import { simpleHandoffScenario } from "@/app/agentConfigs/simpleHandoff";
+import { personalAssistantScenario, personalAssistantCompanyName } from "@/app/agentConfigs/personalAssistant";
 
 // Map used by connect logic for scenarios defined via the SDK.
 const sdkScenarioMap: Record<string, RealtimeAgent[]> = {
   simpleHandoff: simpleHandoffScenario,
   customerServiceRetail: customerServiceRetailScenario,
   chatSupervisor: chatSupervisorScenario,
+  personalAssistant: personalAssistantScenario,
+};
+
+const scenarioCompanyName: Record<string, string> = {
+  simpleHandoff: 'Simple Handoff',
+  customerServiceRetail: customerServiceRetailCompanyName,
+  chatSupervisor: chatSupervisorCompanyName,
+  personalAssistant: personalAssistantCompanyName,
 };
 
 import useAudioDownload from "./hooks/useAudioDownload";
@@ -40,6 +51,11 @@ import { useHandleSessionHistory } from "./hooks/useHandleSessionHistory";
 
 function App() {
   const searchParams = useSearchParams()!;
+  const agentConfigParam = searchParams.get("agentConfig");
+  const agentSetKey =
+    agentConfigParam && allAgentSets[agentConfigParam]
+      ? agentConfigParam
+      : defaultAgentSetKey;
 
   // ---------------------------------------------------------------------
   // Codec selector – lets you toggle between wide-band Opus (48 kHz)
@@ -117,6 +133,11 @@ function App() {
       return stored ? stored === 'true' : true;
     },
   );
+  const [activeMcpServers, setActiveMcpServers] = useState<McpServerConfig[]>([]);
+  const [areMcpServersReady, setAreMcpServersReady] = useState<boolean>(false);
+  const hasInitializedMcpServersRef = useRef<boolean>(false);
+  const reconnectPendingRef = useRef<boolean>(false);
+  const autoConnectEnabledRef = useRef<boolean>(true);
 
   // Initialize the recording hook.
   const { startRecording, stopRecording, downloadRecording } =
@@ -151,10 +172,12 @@ function App() {
   }, [searchParams]);
 
   useEffect(() => {
-    if (selectedAgentName && sessionStatus === "DISCONNECTED") {
-      connectToRealtime();
-    }
-  }, [selectedAgentName]);
+    if (!selectedAgentName) return;
+    if (!areMcpServersReady) return;
+    if (sessionStatus !== "DISCONNECTED") return;
+    if (!autoConnectEnabledRef.current) return;
+    connectToRealtime();
+  }, [selectedAgentName, areMcpServersReady, sessionStatus]);
 
   useEffect(() => {
     if (
@@ -178,31 +201,81 @@ function App() {
     }
   }, [isPTTActive]);
 
-  const fetchEphemeralKey = async (): Promise<string | null> => {
+  const fetchEphemeralKey = async (
+    mcpServers: McpServerConfig[],
+  ): Promise<string | null> => {
     logClientEvent({ url: "/session" }, "fetch_session_token_request");
-    const tokenResponse = await fetch("/api/session");
-    const data = await tokenResponse.json();
-    logServerEvent(data, "fetch_session_token_response");
 
-    if (!data.client_secret?.value) {
-      logClientEvent(data, "error.no_ephemeral_key");
-      console.error("No ephemeral key provided by the server");
+    const eligibleServers = mcpServers.filter((server) => server.status !== 'error');
+
+    const payload = {
+      mcpServers: eligibleServers.map<McpServerRequestPayload>((server) => ({
+        label: server.label,
+        server_url: server.serverUrl,
+        headers: server.headers.length
+          ? server.headers.reduce<Record<string, string>>((acc, header) => {
+              if (header.key && header.value) {
+                acc[header.key] = header.value;
+              }
+              return acc;
+            }, {})
+          : undefined,
+        allowed_tools:
+          server.allowedTools && server.allowedTools.length > 0
+            ? server.allowedTools
+            : undefined,
+      })),
+    };
+
+    try {
+      const tokenResponse = await fetch("/api/session", {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await tokenResponse.json();
+      logServerEvent(data, "fetch_session_token_response");
+
+      if (!tokenResponse.ok) {
+        console.error('Failed to create realtime session', data);
+        autoConnectEnabledRef.current = false;
+        setSessionStatus("DISCONNECTED");
+        return null;
+      }
+
+      if (!data.client_secret?.value) {
+        logClientEvent(data, "error.no_ephemeral_key");
+        console.error("No ephemeral key provided by the server");
+        autoConnectEnabledRef.current = false;
+        setSessionStatus("DISCONNECTED");
+        return null;
+      }
+
+      return data.client_secret.value;
+    } catch (err) {
+      console.error('Error fetching ephemeral key', err);
+      autoConnectEnabledRef.current = false;
       setSessionStatus("DISCONNECTED");
       return null;
     }
-
-    return data.client_secret.value;
   };
 
-  const connectToRealtime = async () => {
-    const agentSetKey = searchParams.get("agentConfig") || "default";
+  const connectToRealtime = async ({ force = false }: { force?: boolean } = {}) => {
     if (sdkScenarioMap[agentSetKey]) {
+      if (!force && !autoConnectEnabledRef.current) return;
       if (sessionStatus !== "DISCONNECTED") return;
       setSessionStatus("CONNECTING");
 
       try {
-        const EPHEMERAL_KEY = await fetchEphemeralKey();
-        if (!EPHEMERAL_KEY) return;
+        const EPHEMERAL_KEY = await fetchEphemeralKey(activeMcpServers);
+        if (!EPHEMERAL_KEY) {
+          autoConnectEnabledRef.current = false;
+          setSessionStatus("DISCONNECTED");
+          return;
+        }
 
         // Ensure the selectedAgentName is first so that it becomes the root
         const reorderedAgents = [...sdkScenarioMap[agentSetKey]];
@@ -212,9 +285,7 @@ function App() {
           reorderedAgents.unshift(agent);
         }
 
-        const companyName = agentSetKey === 'customerServiceRetail'
-          ? customerServiceRetailCompanyName
-          : chatSupervisorCompanyName;
+        const companyName = scenarioCompanyName[agentSetKey] || chatSupervisorCompanyName;
         const guardrail = createModerationGuardrail(companyName);
 
         await connect({
@@ -226,8 +297,10 @@ function App() {
             addTranscriptBreadcrumb,
           },
         });
+        autoConnectEnabledRef.current = true;
       } catch (err) {
         console.error("Error connecting via SDK:", err);
+        autoConnectEnabledRef.current = false;
         setSessionStatus("DISCONNECTED");
       }
       return;
@@ -318,10 +391,12 @@ function App() {
 
   const onToggleConnection = () => {
     if (sessionStatus === "CONNECTED" || sessionStatus === "CONNECTING") {
+      autoConnectEnabledRef.current = false;
       disconnectFromRealtime();
       setSessionStatus("DISCONNECTED");
     } else {
-      connectToRealtime();
+      autoConnectEnabledRef.current = true;
+      connectToRealtime({ force: true });
     }
   };
 
@@ -368,6 +443,39 @@ function App() {
   }, []);
 
   useEffect(() => {
+    if (typeof window === 'undefined') return;
+    setAreMcpServersReady(false);
+    const storageKey = `mcpServers:${agentSetKey}`;
+    const storedServers = window.localStorage.getItem(storageKey);
+
+    if (storedServers) {
+      try {
+        const parsed: McpServerConfig[] = JSON.parse(storedServers);
+        const normalized = parsed.map<McpServerConfig>((server) => ({
+          ...server,
+          headers: (server.headers || []).map((header) => ({
+            id: header.id ?? uuidv4(),
+            key: header.key,
+            value: header.value,
+          })),
+          status: server.status ?? 'connected',
+          tools: server.tools ?? [],
+        }));
+        setActiveMcpServers(normalized);
+      } catch (error) {
+        console.warn('Failed to parse stored MCP servers', error);
+        setActiveMcpServers([]);
+      }
+    } else {
+      setActiveMcpServers([]);
+    }
+
+    hasInitializedMcpServersRef.current = false;
+    reconnectPendingRef.current = false;
+    setAreMcpServersReady(true);
+  }, [agentSetKey]);
+
+  useEffect(() => {
     localStorage.setItem("pushToTalkUI", isPTTActive.toString());
   }, [isPTTActive]);
 
@@ -381,6 +489,45 @@ function App() {
       isAudioPlaybackEnabled.toString()
     );
   }, [isAudioPlaybackEnabled]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const storageKey = `mcpServers:${agentSetKey}`;
+    if (!areMcpServersReady) return;
+    window.localStorage.setItem(storageKey, JSON.stringify(activeMcpServers));
+  }, [activeMcpServers, agentSetKey, areMcpServersReady]);
+
+  useEffect(() => {
+    if (!areMcpServersReady) return;
+    if (!selectedAgentName) return;
+
+    if (!hasInitializedMcpServersRef.current) {
+      hasInitializedMcpServersRef.current = true;
+      return;
+    }
+
+    reconnectPendingRef.current = true;
+
+    if (sessionStatus === "CONNECTED") {
+      autoConnectEnabledRef.current = true;
+      disconnectFromRealtime();
+    } else if (sessionStatus === "DISCONNECTED") {
+      autoConnectEnabledRef.current = true;
+      connectToRealtime({ force: true });
+    }
+    // If we're currently connecting we let the sessionStatus effect below finish the cycle.
+  }, [activeMcpServers, areMcpServersReady, selectedAgentName]);
+
+  useEffect(() => {
+    if (!reconnectPendingRef.current) return;
+    if (!areMcpServersReady) return;
+    if (!selectedAgentName) return;
+    if (sessionStatus !== "DISCONNECTED") return;
+
+    reconnectPendingRef.current = false;
+    autoConnectEnabledRef.current = true;
+    connectToRealtime({ force: true });
+  }, [sessionStatus, areMcpServersReady, selectedAgentName]);
 
   useEffect(() => {
     if (audioElementRef.current) {
@@ -430,8 +577,6 @@ function App() {
     };
   }, [sessionStatus]);
 
-  const agentSetKey = searchParams.get("agentConfig") || "default";
-
   return (
     <div className="text-base flex flex-col h-screen bg-gray-100 text-gray-800 relative">
       <div className="p-5 text-lg font-semibold flex justify-between items-center">
@@ -464,7 +609,7 @@ function App() {
             >
               {Object.keys(allAgentSets).map((agentKey) => (
                 <option key={agentKey} value={agentKey}>
-                  {agentKey}
+                  {agentSetLabels[agentKey] ?? agentKey}
                 </option>
               ))}
             </select>
@@ -512,6 +657,13 @@ function App() {
               </div>
             </div>
           )}
+
+          <div className="ml-6">
+            <McpManager
+              servers={activeMcpServers}
+              onServersChange={setActiveMcpServers}
+            />
+          </div>
         </div>
       </div>
 
