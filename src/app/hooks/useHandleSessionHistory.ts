@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef } from "react";
+import { useCallback, useMemo, useRef } from "react";
 import { useTranscript } from "@/app/contexts/TranscriptContext";
 import { useEvent } from "@/app/contexts/EventContext";
 
@@ -50,7 +50,13 @@ export function useHandleSessionHistory() {
 
   const extractLastAssistantMessage = (history: any[] = []): any => {
     if (!Array.isArray(history)) return undefined;
-    return history.reverse().find((c: any) => c.type === 'message' && c.role === 'assistant');
+    for (let i = history.length - 1; i >= 0; i -= 1) {
+      const entry = history[i];
+      if (entry?.type === 'message' && entry.role === 'assistant') {
+        return entry;
+      }
+    }
+    return undefined;
   };
 
   const extractModeration = (obj: any) => {
@@ -67,7 +73,7 @@ export function useHandleSessionHistory() {
 
   /* ----------------------- event handlers ------------------------- */
 
-  function handleAgentToolStart(details: any, _agent: any, functionCall: any) {
+  const handleAgentToolStart = useCallback((details: any, _agent: any, functionCall: any) => {
     const lastFunctionCall = extractFunctionCallByName(functionCall.name, details?.context?.history);
     const function_name = lastFunctionCall?.name;
     const function_args = lastFunctionCall?.arguments;
@@ -76,16 +82,17 @@ export function useHandleSessionHistory() {
       `function call: ${function_name}`,
       function_args
     );    
-  }
-  function handleAgentToolEnd(details: any, _agent: any, _functionCall: any, result: any) {
+  }, [addTranscriptBreadcrumb]);
+
+  const handleAgentToolEnd = useCallback((details: any, _agent: any, _functionCall: any, result: any) => {
     const lastFunctionCall = extractFunctionCallByName(_functionCall.name, details?.context?.history);
     addTranscriptBreadcrumb(
       `function call result: ${lastFunctionCall?.name}`,
       maybeParseJson(result)
     );
-  }
+  }, [addTranscriptBreadcrumb]);
 
-  function handleHistoryAdded(item: any) {
+  const handleHistoryAdded = useCallback((item: any) => {
     console.log("[handleHistoryAdded] ", item);
     if (!item || item.type !== 'message') return;
 
@@ -108,9 +115,9 @@ export function useHandleSessionHistory() {
         addTranscriptMessage(itemId, role, text);
       }
     }
-  }
+  }, [addTranscriptBreadcrumb, addTranscriptMessage]);
 
-  function handleHistoryUpdated(items: any[]) {
+  const handleHistoryUpdated = useCallback((items: any[]) => {
     console.log("[handleHistoryUpdated] ", items);
     items.forEach((item: any) => {
       if (!item || item.type !== 'message') return;
@@ -123,17 +130,17 @@ export function useHandleSessionHistory() {
         updateTranscriptMessage(itemId, text, false);
       }
     });
-  }
+  }, [updateTranscriptMessage]);
 
-  function handleTranscriptionDelta(item: any) {
+  const handleTranscriptionDelta = useCallback((item: any) => {
     const itemId = item.item_id;
     const deltaText = item.delta || "";
     if (itemId) {
       updateTranscriptMessage(itemId, deltaText, true);
     }
-  }
+  }, [updateTranscriptMessage]);
 
-  function handleTranscriptionCompleted(item: any) {
+  const handleTranscriptionCompleted = useCallback((item: any) => {
     // History updates don't reliably end in a completed item, 
     // so we need to handle finishing up when the transcription is completed.
     const itemId = item.item_id;
@@ -158,9 +165,9 @@ export function useHandleSessionHistory() {
         });
       }
     }
-  }
+  }, [transcriptItems, updateTranscriptItem, updateTranscriptMessage]);
 
-  function handleGuardrailTripped(details: any, _agent: any, guardrail: any) {
+  const handleGuardrailTripped = useCallback((details: any, _agent: any, guardrail: any) => {
     console.log("[guardrail tripped]", details, _agent, guardrail);
     const moderation = extractModeration(guardrail.result.output.outputInfo);
     logServerEvent({ type: 'guardrail_tripped', payload: moderation });
@@ -182,17 +189,32 @@ export function useHandleSessionHistory() {
         },
       });
     }
-  }
+  }, [logServerEvent, updateTranscriptItem]);
 
-  const handlersRef = useRef({
-    handleAgentToolStart,
-    handleAgentToolEnd,
-    handleHistoryUpdated,
-    handleHistoryAdded,
-    handleTranscriptionDelta,
-    handleTranscriptionCompleted,
-    handleGuardrailTripped,
-  });
+  const handlers = useMemo(
+    () => ({
+      handleAgentToolStart,
+      handleAgentToolEnd,
+      handleHistoryUpdated,
+      handleHistoryAdded,
+      handleTranscriptionDelta,
+      handleTranscriptionCompleted,
+      handleGuardrailTripped,
+    }),
+    [
+      handleAgentToolStart,
+      handleAgentToolEnd,
+      handleHistoryUpdated,
+      handleHistoryAdded,
+      handleTranscriptionDelta,
+      handleTranscriptionCompleted,
+      handleGuardrailTripped,
+    ],
+  );
+
+  const handlersRef = useRef(handlers);
+
+  handlersRef.current = handlers;
 
   return handlersRef;
 }
