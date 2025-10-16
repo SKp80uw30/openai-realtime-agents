@@ -135,9 +135,6 @@ function App() {
   );
   const [activeMcpServers, setActiveMcpServers] = useState<McpServerConfig[]>([]);
   const [areMcpServersReady, setAreMcpServersReady] = useState<boolean>(false);
-  const hasInitializedMcpServersRef = useRef<boolean>(false);
-  const reconnectPendingRef = useRef<boolean>(false);
-  const autoConnectEnabledRef = useRef<boolean>(true);
 
   // Initialize the recording hook.
   const { startRecording, stopRecording, downloadRecording } =
@@ -170,14 +167,6 @@ function App() {
     setSelectedAgentName(agentKeyToUse);
     setSelectedAgentConfigSet(agents);
   }, [searchParams]);
-
-  useEffect(() => {
-    if (!selectedAgentName) return;
-    if (!areMcpServersReady) return;
-    if (sessionStatus !== "DISCONNECTED") return;
-    if (!autoConnectEnabledRef.current) return;
-    connectToRealtime();
-  }, [selectedAgentName, areMcpServersReady, sessionStatus]);
 
   useEffect(() => {
     if (
@@ -241,7 +230,6 @@ function App() {
 
       if (!tokenResponse.ok) {
         console.error('Failed to create realtime session', data);
-        autoConnectEnabledRef.current = false;
         setSessionStatus("DISCONNECTED");
         return null;
       }
@@ -249,7 +237,6 @@ function App() {
       if (!data.client_secret?.value) {
         logClientEvent(data, "error.no_ephemeral_key");
         console.error("No ephemeral key provided by the server");
-        autoConnectEnabledRef.current = false;
         setSessionStatus("DISCONNECTED");
         return null;
       }
@@ -257,22 +244,19 @@ function App() {
       return data.client_secret.value;
     } catch (err) {
       console.error('Error fetching ephemeral key', err);
-      autoConnectEnabledRef.current = false;
       setSessionStatus("DISCONNECTED");
       return null;
     }
   };
 
-  const connectToRealtime = async ({ force = false }: { force?: boolean } = {}) => {
+  const connectToRealtime = async () => {
     if (sdkScenarioMap[agentSetKey]) {
-      if (!force && !autoConnectEnabledRef.current) return;
       if (sessionStatus !== "DISCONNECTED") return;
       setSessionStatus("CONNECTING");
 
       try {
         const EPHEMERAL_KEY = await fetchEphemeralKey(activeMcpServers);
         if (!EPHEMERAL_KEY) {
-          autoConnectEnabledRef.current = false;
           setSessionStatus("DISCONNECTED");
           return;
         }
@@ -297,10 +281,8 @@ function App() {
             addTranscriptBreadcrumb,
           },
         });
-        autoConnectEnabledRef.current = true;
       } catch (err) {
         console.error("Error connecting via SDK:", err);
-        autoConnectEnabledRef.current = false;
         setSessionStatus("DISCONNECTED");
       }
       return;
@@ -391,12 +373,10 @@ function App() {
 
   const onToggleConnection = () => {
     if (sessionStatus === "CONNECTED" || sessionStatus === "CONNECTING") {
-      autoConnectEnabledRef.current = false;
       disconnectFromRealtime();
       setSessionStatus("DISCONNECTED");
     } else {
-      autoConnectEnabledRef.current = true;
-      connectToRealtime({ force: true });
+      connectToRealtime();
     }
   };
 
@@ -411,11 +391,10 @@ function App() {
     e: React.ChangeEvent<HTMLSelectElement>
   ) => {
     const newAgentName = e.target.value;
-    // Reconnect session with the newly selected agent as root so that tool
-    // execution works correctly.
-    disconnectFromRealtime();
+    if (sessionStatus === "CONNECTED" || sessionStatus === "CONNECTING") {
+      disconnectFromRealtime();
+    }
     setSelectedAgentName(newAgentName);
-    // connectToRealtime will be triggered by effect watching selectedAgentName
   };
 
   // Because we need a new connection, refresh the page when codec changes
@@ -470,8 +449,6 @@ function App() {
       setActiveMcpServers([]);
     }
 
-    hasInitializedMcpServersRef.current = false;
-    reconnectPendingRef.current = false;
     setAreMcpServersReady(true);
   }, [agentSetKey]);
 
@@ -496,38 +473,6 @@ function App() {
     if (!areMcpServersReady) return;
     window.localStorage.setItem(storageKey, JSON.stringify(activeMcpServers));
   }, [activeMcpServers, agentSetKey, areMcpServersReady]);
-
-  useEffect(() => {
-    if (!areMcpServersReady) return;
-    if (!selectedAgentName) return;
-
-    if (!hasInitializedMcpServersRef.current) {
-      hasInitializedMcpServersRef.current = true;
-      return;
-    }
-
-    reconnectPendingRef.current = true;
-
-    if (sessionStatus === "CONNECTED") {
-      autoConnectEnabledRef.current = true;
-      disconnectFromRealtime();
-    } else if (sessionStatus === "DISCONNECTED") {
-      autoConnectEnabledRef.current = true;
-      connectToRealtime({ force: true });
-    }
-    // If we're currently connecting we let the sessionStatus effect below finish the cycle.
-  }, [activeMcpServers, areMcpServersReady, selectedAgentName]);
-
-  useEffect(() => {
-    if (!reconnectPendingRef.current) return;
-    if (!areMcpServersReady) return;
-    if (!selectedAgentName) return;
-    if (sessionStatus !== "DISCONNECTED") return;
-
-    reconnectPendingRef.current = false;
-    autoConnectEnabledRef.current = true;
-    connectToRealtime({ force: true });
-  }, [sessionStatus, areMcpServersReady, selectedAgentName]);
 
   useEffect(() => {
     if (audioElementRef.current) {
@@ -579,61 +524,57 @@ function App() {
 
   return (
     <div className="text-base flex flex-col h-screen bg-gray-100 text-gray-800 relative">
-      <div className="p-5 text-lg font-semibold flex justify-between items-center">
-        <div
-          className="flex items-center cursor-pointer"
+      <div className="p-4 md:p-5 text-lg font-semibold flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <button
+          className="flex items-center cursor-pointer text-left"
           onClick={() => window.location.reload()}
         >
-          <div>
-            <Image
-              src="/openai-logomark.svg"
-              alt="OpenAI Logo"
-              width={20}
-              height={20}
-              className="mr-2"
-            />
-          </div>
-          <div>
+          <Image
+            src="/openai-logomark.svg"
+            alt="OpenAI Logo"
+            width={20}
+            height={20}
+            className="mr-2"
+          />
+          <span>
             Realtime API <span className="text-gray-500">Agents</span>
-          </div>
-        </div>
-        <div className="flex items-center">
-          <label className="flex items-center text-base gap-1 mr-2 font-medium">
-            Scenario
-          </label>
-          <div className="relative inline-block">
-            <select
-              value={agentSetKey}
-              onChange={handleAgentChange}
-              className="appearance-none border border-gray-300 rounded-lg text-base px-2 py-1 pr-8 cursor-pointer font-normal focus:outline-none"
-            >
-              {Object.keys(allAgentSets).map((agentKey) => (
-                <option key={agentKey} value={agentKey}>
-                  {agentSetLabels[agentKey] ?? agentKey}
-                </option>
-              ))}
-            </select>
-            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2 text-gray-600">
-              <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                <path
-                  fillRule="evenodd"
-                  d="M5.23 7.21a.75.75 0 011.06.02L10 10.44l3.71-3.21a.75.75 0 111.04 1.08l-4.25 3.65a.75.75 0 01-1.04 0L5.21 8.27a.75.75 0 01.02-1.06z"
-                  clipRule="evenodd"
-                />
-              </svg>
+          </span>
+        </button>
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:gap-6 w-full md:w-auto">
+          <div className="flex flex-col w-full sm:w-auto sm:flex-row sm:items-center gap-2">
+            <label className="text-sm font-medium text-gray-700">Scenario</label>
+            <div className="relative w-full sm:w-auto">
+              <select
+                value={agentSetKey}
+                onChange={handleAgentChange}
+                className="w-full appearance-none border border-gray-300 rounded-lg text-base px-3 py-2 pr-8 cursor-pointer font-normal focus:outline-none bg-white"
+              >
+                {Object.keys(allAgentSets).map((agentKey) => (
+                  <option key={agentKey} value={agentKey}>
+                    {agentSetLabels[agentKey] ?? agentKey}
+                  </option>
+                ))}
+              </select>
+              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2 text-gray-600">
+                <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                  <path
+                    fillRule="evenodd"
+                    d="M5.23 7.21a.75.75 0 011.06.02L10 10.44l3.71-3.21a.75.75 0 111.04 1.08l-4.25 3.65a.75.75 0 01-1.04 0L5.21 8.27a.75.75 0 01.02-1.06z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+              </div>
             </div>
           </div>
 
           {agentSetKey && (
-            <div className="flex items-center ml-6">
-              <label className="flex items-center text-base gap-1 mr-2 font-medium">
-                Agent
-              </label>
-              <div className="relative inline-block">
+            <div className="flex flex-col w-full sm:w-auto sm:flex-row sm:items-center gap-2">
+              <label className="text-sm font-medium text-gray-700">Agent</label>
+              <div className="relative w-full sm:w-auto">
                 <select
                   value={selectedAgentName}
                   onChange={handleSelectedAgentChange}
-                  className="appearance-none border border-gray-300 rounded-lg text-base px-2 py-1 pr-8 cursor-pointer font-normal focus:outline-none"
+                  className="w-full appearance-none border border-gray-300 rounded-lg text-base px-3 py-2 pr-8 cursor-pointer font-normal focus:outline-none bg-white"
                 >
                   {selectedAgentConfigSet?.map((agent) => (
                     <option key={agent.name} value={agent.name}>
@@ -658,7 +599,7 @@ function App() {
             </div>
           )}
 
-          <div className="ml-6">
+          <div className="flex items-center">
             <McpManager
               servers={activeMcpServers}
               onServersChange={setActiveMcpServers}
@@ -667,7 +608,7 @@ function App() {
         </div>
       </div>
 
-      <div className="flex flex-1 gap-2 px-2 overflow-hidden relative">
+      <div className="flex flex-1 flex-col md:flex-row gap-3 px-2 overflow-hidden relative">
         <Transcript
           userText={userText}
           setUserText={setUserText}
@@ -678,7 +619,10 @@ function App() {
           }
         />
 
-        <Events isExpanded={isEventsPaneExpanded} />
+        <Events
+          isExpanded={isEventsPaneExpanded}
+          onClose={() => setIsEventsPaneExpanded(false)}
+        />
       </div>
 
       <BottomToolbar

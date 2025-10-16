@@ -6,9 +6,10 @@ import { LoggedEvent } from "@/app/types";
 
 export interface EventsProps {
   isExpanded: boolean;
+  onClose?: () => void;
 }
 
-function Events({ isExpanded }: EventsProps) {
+function Events({ isExpanded, onClose }: EventsProps) {
   const [prevEventLogs, setPrevEventLogs] = useState<LoggedEvent[]>([]);
   const eventLogsContainerRef = useRef<HTMLDivElement | null>(null);
 
@@ -31,18 +32,28 @@ function Events({ isExpanded }: EventsProps) {
     setPrevEventLogs(loggedEvents);
   }, [loggedEvents, isExpanded]);
 
+  const containerClass = isExpanded
+    ? "flex w-full md:w-1/2 max-h-[50vh] md:max-h-none overflow-auto"
+    : "hidden md:flex md:w-0 md:opacity-0 md:overflow-hidden";
+
   return (
     <div
-      className={
-        (isExpanded ? "w-1/2 overflow-auto" : "w-0 overflow-hidden opacity-0") +
-        " transition-all rounded-xl duration-200 ease-in-out flex-col bg-white"
-      }
+      className={`transition-all duration-200 ease-in-out bg-white rounded-xl flex-col ${containerClass}`}
       ref={eventLogsContainerRef}
     >
       {isExpanded && (
         <div>
-          <div className="flex items-center justify-between px-6 py-3.5 sticky top-0 z-10 text-base border-b bg-white rounded-t-xl">
+          <div className="flex items-center justify-between px-4 md:px-6 py-3.5 sticky top-0 z-10 text-base border-b bg-white rounded-t-xl">
             <span className="font-semibold">Logs</span>
+            {onClose && (
+              <button
+                type="button"
+                onClick={onClose}
+                className="md:hidden text-sm text-gray-500 px-2 py-1 rounded-md hover:bg-gray-100"
+              >
+                Close
+              </button>
+            )}
           </div>
           <div>
             {loggedEvents.map((log, idx) => {
@@ -54,7 +65,7 @@ function Events({ isExpanded }: EventsProps) {
               return (
                 <div
                   key={`${log.id}-${idx}`}
-                  className="border-t border-gray-200 py-2 px-6 font-mono"
+                  className="border-t border-gray-200 py-2 px-4 md:px-6 font-mono"
                 >
                   <div
                     onClick={() => toggleExpand(log.id)}

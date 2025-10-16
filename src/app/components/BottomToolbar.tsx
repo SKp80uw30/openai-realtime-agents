@@ -59,16 +59,16 @@ function BottomToolbar({
   }
 
   return (
-    <div className="p-4 flex flex-row items-center justify-center gap-x-8">
+    <div className="p-4 flex flex-col gap-4 md:flex-row md:flex-wrap md:items-center md:justify-center">
       <button
         onClick={onToggleConnection}
-        className={getConnectionButtonClasses()}
+        className={`${getConnectionButtonClasses()} self-stretch md:self-auto`}
         disabled={isConnecting}
       >
         {getConnectionButtonLabel()}
       </button>
 
-      <div className="flex flex-row items-center gap-2">
+      <div className="flex flex-row flex-wrap items-center gap-2">
         <input
           id="push-to-talk"
           type="checkbox"
@@ -99,7 +99,7 @@ function BottomToolbar({
         </button>
       </div>
 
-      <div className="flex flex-row items-center gap-1">
+      <div className="flex flex-row items-center gap-2">
         <input
           id="audio-playback"
           type="checkbox"
@@ -112,7 +112,7 @@ function BottomToolbar({
           htmlFor="audio-playback"
           className="flex items-center cursor-pointer"
         >
-          Audio playback
+        Audio playback
         </label>
       </div>
 
@@ -129,8 +129,8 @@ function BottomToolbar({
         </label>
       </div>
 
-      <div className="flex flex-row items-center gap-2">
-        <div>Codec:</div>
+      <div className="flex flex-row flex-wrap items-center gap-2">
+        <div className="text-sm text-gray-700">Codec:</div>
         {/*
           Codec selector – Lets you force the WebRTC track to use 8 kHz 
           PCMU/PCMA so you can preview how the agent will sound 
