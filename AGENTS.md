@@ -1,20 +1,22 @@
 # Repository Guidelines
 
 ## Project Structure & Module Organization
-This Next.js TypeScript app lives under `src/app`. Routing, layouts, and shared UI sit beside feature code: `page.tsx` for the landing experience, `layout.tsx` for global wrappers, and `components/`, `hooks/`, and `contexts/` for reusable pieces. Agent behavior is defined in `agentConfigs/` (e.g., `chatSupervisor/`, `customerServiceRetail/`, `simpleHandoff.ts`), while API routes and realtime session orchestration live in `api/`. Global styling and Tailwind layers reside in `globals.css` and `public/` holds static assets such as screenshots.
+The Next.js TypeScript app lives under `src/app`. Route folders hold `page.tsx` and optional `layout.tsx`, with shared UI in `components/`, `contexts/`, and `hooks/`. Agent implementations live in `src/app/agentConfigs/` (e.g., `chatSupervisor/`, `customerServiceRetail/`, `simpleHandoff.ts`). API handlers and realtime session logic sit under `src/app/api/`. Global styles are in `src/app/globals.css`, while static assets such as screenshots reside in `public/`. Configuration, linting, and Tailwind setup files stay at the repository root.
 
-## Build, Test & Development Commands
-Use `npm run dev` for a local development server with hot reload. `npm run build` produces the optimized Next.js bundle, and `npm run start` serves that build (run after `build`). `npm run lint` executes the ESLint suite configured via `eslint.config.mjs` to ensure consistency before committing.
+## Build, Test, and Development Commands
+- `npm run dev` starts the local dev server with hot reload at `http://localhost:3000`.
+- `npm run build` compiles the production bundle; run this before deploying.
+- `npm run start` serves the optimized build locally for verification.
+- `npm run lint` runs ESLint using `eslint.config.mjs` and should be clean before committing.
 
 ## Coding Style & Naming Conventions
-Follow the repository’s default TypeScript + ESLint rules: 2-space indentation, semicolons enforced, and camelCase for variables, PascalCase for React components, and kebab-case for files in `app/` routes. Tailwind utility classes stay inline; extract shared styling into `components/` when duplication grows. Keep agent prompts and schemas co-located with their configs so downstream tools stay easy to trace.
+Use TypeScript with 2-space indentation and required semicolons. Apply camelCase for variables and functions, PascalCase for React components, and kebab-case for route folders inside `app/`. Keep Tailwind utility classes inline unless extraction improves reuse; shared styling components belong in `components/`. Let ESLint autofix handle formatting where possible (`npm run lint -- --fix`).
 
 ## Testing Guidelines
-Automated tests are not yet implemented. Before raising a PR, run `npm run lint`, then exercise each scenario via the UI: verify realtime handoffs in `chatSupervisor`, multi-agent transfers in `customerServiceRetail`, and audio capture flows in supported browsers. Document any manual steps in the PR description until formal tests land.
+Automated tests are not yet implemented. Run `npm run lint` before every commit, then manually cover key flows: realtime handoffs in `chatSupervisor`, sequential transfers in `customerServiceRetail`, and browser audio capture. Log manual coverage, edge cases, and any blockers in your PR description.
 
 ## Commit & Pull Request Guidelines
-Commits should be scoped and written in the imperative tense (e.g., `Add customer handoff logging`), mirroring the existing history. Reference related issues or PR numbers when relevant. For pull requests, include: a concise summary, screenshots or screen recordings for UI changes, environment assumptions (e.g., required env vars), and manual test notes. Draft PRs are encouraged for early feedback when modifying agent prompts or session wiring.
+Write scoped, imperative commit messages (e.g., `Add supervisor escalation prompt`). Squash noisy fixup commits before opening the PR. PRs should link related issues, summarize user-visible changes, call out required env vars, and attach screenshots or recordings for UI updates. Include manual test notes and highlight known risks or follow-up work.
 
 ## Agent Configuration Tips
-Each agent config exports a typed definition consumed by the Next.js client. When introducing a new agent, start from an existing config, update `agentConfigs/index.ts`, and confirm any new downstream tools are registered via `injectTransferTools`. Store reusable prompts in plain-text files (see `voiceAgentMetaprompt.txt`) to simplify iteration and review.
-Use the `MCP Servers` control in the header to register remote connectors (Zapier, Google Drive, etc.). Provide the connector URL plus any required headers (for Zapier, keep the prefilled `Authorization: Bearer ` header and append the long API token Zapier gives you). The modal lists the tools the server exposes after the connection test, and the selections are stored per scenario and forwarded to the realtime session as `mcp` tools so the assistant can call them immediately after reconnecting.
+Each agent config exports typed metadata consumed by the client. When adding an agent, start from an existing config, update `src/app/agentConfigs/index.ts`, and register downstream tools via `injectTransferTools`. Store reusable prompts in plain text files such as `voiceAgentMetaprompt.txt` for easy review. Use the MCP Servers modal to register external connectors and confirm exposed tools before enabling them.
