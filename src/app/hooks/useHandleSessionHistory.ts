@@ -17,18 +17,68 @@ export function useHandleSessionHistory() {
 
   /* ----------------------- helpers ------------------------- */
 
+  const limitRepeatedWords = (value: string, maxRepeats = 3): string => {
+    const tokens = value.split(/(\s+)/);
+    let lastWord = "";
+    let repeatCount = 0;
+    const result: string[] = [];
+
+    for (const token of tokens) {
+      if (!token.trim()) {
+        result.push(token);
+        continue;
+      }
+
+      const normalized = token.toLowerCase();
+      if (normalized === lastWord) {
+        repeatCount += 1;
+        if (repeatCount < maxRepeats) {
+          result.push(token);
+        }
+      } else {
+        lastWord = normalized;
+        repeatCount = 0;
+        result.push(token);
+      }
+    }
+
+    return result.join("");
+  };
+
   const extractMessageText = (content: any[] = []): string => {
     if (!Array.isArray(content)) return "";
 
-    return content
-      .map((c) => {
-        if (!c || typeof c !== "object") return "";
-        if (c.type === "input_text") return c.text ?? "";
-        if (c.type === "audio") return c.transcript ?? "";
-        return "";
-      })
-      .filter(Boolean)
-      .join("\n");
+    const fragments: string[] = [];
+    let latestOutputText = "";
+    let lastFragment = "";
+
+    for (const chunk of content) {
+      if (!chunk || typeof chunk !== "object") continue;
+
+      const rawText =
+        typeof chunk.text === 'string'
+          ? chunk.text
+          : typeof chunk.transcript === 'string'
+            ? chunk.transcript
+            : "";
+      const text = rawText ? limitRepeatedWords(rawText) : "";
+      if (!text) continue;
+
+      if (chunk.type === 'output_text' || chunk.type === 'text') {
+        latestOutputText = text;
+      } else if (chunk.type === 'input_text' || chunk.type === 'audio') {
+        if (text !== lastFragment) {
+          fragments.push(text);
+          lastFragment = text;
+        }
+      }
+    }
+
+    if (latestOutputText && latestOutputText !== lastFragment) {
+      fragments.push(latestOutputText);
+    }
+
+    return fragments.join("\n");
   };
 
   const extractFunctionCallByName = (name: string, content: any[] = []): any => {
