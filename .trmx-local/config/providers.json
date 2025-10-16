@@ -1,0 +1,5 @@
+{
+  "active_provider": "together",
+  "active_model": "mistralai/Mixtral-8x7B-Instruct-v0.1",
+  "providers": {}
+}
