@@ -73,6 +73,7 @@ function App() {
   // via global codecPatch at module load 
 
   const {
+    transcriptItems,
     addTranscriptMessage,
     addTranscriptBreadcrumb,
   } = useTranscript();
@@ -84,6 +85,7 @@ function App() {
   >(null);
 
   const audioElementRef = useRef<HTMLAudioElement | null>(null);
+  const [lastActivityAt, setLastActivityAt] = useState<number>(Date.now());
   // Ref to identify whether the latest agent switch came from an automatic handoff
   const handoffTriggeredRef = useRef(false);
 
@@ -183,6 +185,33 @@ function App() {
       handoffTriggeredRef.current = false;
     }
   }, [selectedAgentConfigSet, selectedAgentName, sessionStatus]);
+
+  useEffect(() => {
+    if (transcriptItems.length === 0) return;
+    setLastActivityAt(Date.now());
+  }, [transcriptItems]);
+
+  useEffect(() => {
+    if (sessionStatus === "CONNECTED") {
+      setLastActivityAt(Date.now());
+    }
+  }, [sessionStatus]);
+
+  useEffect(() => {
+    if (sessionStatus !== "CONNECTED") return;
+
+    const timeoutId = window.setTimeout(() => {
+      addTranscriptBreadcrumb('Session ended due to inactivity', {
+        idleMinutes: 2,
+      });
+      disconnectFromRealtime();
+      setSessionStatus("DISCONNECTED");
+    }, 2 * 60 * 1000);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [sessionStatus, lastActivityAt, addTranscriptBreadcrumb, disconnectFromRealtime]);
 
   useEffect(() => {
     if (sessionStatus === "CONNECTED") {
