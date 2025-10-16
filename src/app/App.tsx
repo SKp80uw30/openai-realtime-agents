@@ -120,6 +120,12 @@ function App() {
     },
   });
 
+  const disconnectFromRealtime = React.useCallback(() => {
+    disconnect();
+    setSessionStatus("DISCONNECTED");
+    setIsPTTUserSpeaking(false);
+  }, [disconnect]);
+
   const [sessionStatus, setSessionStatus] =
     useState<SessionStatus>("DISCONNECTED");
 
@@ -205,7 +211,6 @@ function App() {
         idleMinutes: 2,
       });
       disconnectFromRealtime();
-      setSessionStatus("DISCONNECTED");
     }, 2 * 60 * 1000);
 
     return () => {
@@ -316,12 +321,6 @@ function App() {
       }
       return;
     }
-  };
-
-  const disconnectFromRealtime = () => {
-    disconnect();
-    setSessionStatus("DISCONNECTED");
-    setIsPTTUserSpeaking(false);
   };
 
   const sendSimulatedUserMessage = (text: string) => {
