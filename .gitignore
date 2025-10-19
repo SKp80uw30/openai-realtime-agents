@@ -21,6 +21,10 @@
 # misc
 .DS_Store
 *.pem
+.venv/
+.venv-mcp/
+.tmp_fastmcp/
+.trmx-local/
 
 # debug
 npm-debug.log*
@@ -39,4 +43,3 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 todo.md
-
