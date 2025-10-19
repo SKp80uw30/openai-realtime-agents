@@ -1,0 +1,8 @@
+{
+  "session_id": "72a0e298-fd34-489c-964d-9c71e493e72b",
+  "created_at": "2025-10-16T20:31:51.529305",
+  "title": "New Chat",
+  "provider": "together",
+  "model": "mistralai/Mixtral-8x7B-Instruct-v0.1",
+  "messages": []
+}

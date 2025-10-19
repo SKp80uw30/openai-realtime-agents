@@ -14,6 +14,19 @@ export const MCP_CONNECTOR_CATALOG: McpConnectorDefinition[] = [
     },
   },
   {
+    id: 'google-workspace-mcp',
+    name: 'Google Workspace MCP',
+    description:
+      'Unified Google Workspace tools including Calendar, Gmail, and Slack integrations hosted by Workspace MCP.',
+    category: 'thirdParty',
+    documentationUrl: 'https://workspacemcp.com/',
+    serverUrl: 'https://googleworkspacemcp-production.up.railway.app/mcp',
+    authUrl: 'https://googleworkspacemcp-production.up.railway.app/auth/google',
+    authButtonLabel: 'Authorize Google Workspace',
+    authHelpText:
+      'Launches the Workspace MCP OAuth consent flow in a new tab. Save the server first so the configuration persists.',
+  },
+  {
     id: 'google-drive-openai',
     name: 'Google Drive (OpenAI Connector)',
     description:
