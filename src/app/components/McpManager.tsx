@@ -100,7 +100,10 @@ export default function McpManager({ servers, onServersChange }: McpManagerProps
     setIsOpen(false);
   };
 
-  const fetchAuthInfo = async (rawServerUrl: string) => {
+  const fetchAuthInfo = async (
+    rawServerUrl: string,
+    overrideHeaders?: McpServerHeader[],
+  ) => {
     const trimmed = rawServerUrl.trim();
     if (!trimmed) {
       setAuthInfo(null);
@@ -108,10 +111,9 @@ export default function McpManager({ servers, onServersChange }: McpManagerProps
       return null;
     }
 
-    let origin: string | null = null;
     try {
-      const parsed = new URL(trimmed);
-      origin = `${parsed.protocol}//${parsed.host}`;
+      // Validate URL format early so we can surface a friendly message.
+      new URL(trimmed);
     } catch {
       setAuthInfo(null);
       setAuthInfoError('Server URL is not a valid absolute URL.');
@@ -122,20 +124,30 @@ export default function McpManager({ servers, onServersChange }: McpManagerProps
     setAuthInfoError('');
 
     try {
-      const response = await fetch(`${origin}/auth/info`, {
-        method: 'GET',
+      const response = await fetch('/api/mcp/auth-info', {
+        method: 'POST',
         headers: {
-          'Accept': 'application/json',
+          'Content-Type': 'application/json',
         },
+        body: JSON.stringify({
+          serverUrl: trimmed,
+          headers: overrideHeaders ?? draft.headers,
+        }),
       });
 
+      const data = await response.json().catch(() => ({}));
+
       if (!response.ok) {
-        throw new Error(`Server returned ${response.status}`);
+        const message =
+          typeof data?.error === 'string'
+            ? data.error
+            : `Server returned ${response.status}`;
+        throw new Error(message);
       }
 
-      const data: McpAuthInfo = await response.json();
-      setAuthInfo(data);
-      return data;
+      const typed = data as McpAuthInfo;
+      setAuthInfo(typed);
+      return typed;
     } catch (err: any) {
       const message = err?.message || 'Unable to fetch auth info from server.';
       setAuthInfo(null);
@@ -150,22 +162,25 @@ export default function McpManager({ servers, onServersChange }: McpManagerProps
     const definition = MCP_CONNECTOR_CATALOG.find((item) => item.id === id);
     setAuthInfo(null);
     setAuthInfoError('');
+
+    const defaultHeaders = definition?.defaultHeaders
+      ? Object.entries(definition.defaultHeaders).map(([key, value]) => ({
+          id: uuidv4(),
+          key,
+          value,
+        }))
+      : [];
+
     setDraft((prev) => ({
       ...prev,
       connectorId: id,
       category: definition?.category ?? prev.category,
       serverUrl: definition?.serverUrl ?? '',
-      headers: definition?.defaultHeaders
-        ? Object.entries(definition.defaultHeaders).map(([key, value]) => ({
-            id: uuidv4(),
-            key,
-            value,
-          }))
-        : [],
+      headers: defaultHeaders,
     }));
 
     if (definition?.serverUrl) {
-      void fetchAuthInfo(definition.serverUrl);
+      void fetchAuthInfo(definition.serverUrl, defaultHeaders);
     }
   };
 
