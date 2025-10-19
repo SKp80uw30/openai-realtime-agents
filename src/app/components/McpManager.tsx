@@ -5,6 +5,7 @@ import { v4 as uuidv4 } from 'uuid';
 
 import { MCP_CONNECTOR_CATALOG } from '@/app/data/mcpCatalog';
 import type {
+  McpAuthInfo,
   McpConnectorCategory,
   McpConnectorDefinition,
   McpServerConfig,
@@ -50,6 +51,9 @@ export default function McpManager({ servers, onServersChange }: McpManagerProps
   const [draft, setDraft] = useState<DraftServerState>(() => ({ ...DEFAULT_STATE }));
   const [error, setError] = useState<string>('');
   const [isTesting, setIsTesting] = useState(false);
+  const [authInfo, setAuthInfo] = useState<McpAuthInfo | null>(null);
+  const [authInfoError, setAuthInfoError] = useState('');
+  const [isAuthInfoLoading, setIsAuthInfoLoading] = useState(false);
 
   const groupedCatalog = useMemo(() => {
     return MCP_CONNECTOR_CATALOG.reduce<Record<McpConnectorCategory, McpConnectorDefinition[]>>(
@@ -82,6 +86,9 @@ export default function McpManager({ servers, onServersChange }: McpManagerProps
     });
     setError('');
     setIsTesting(false);
+    setAuthInfo(null);
+    setAuthInfoError('');
+    setIsAuthInfoLoading(false);
   };
 
   const handleOpen = () => {
@@ -93,21 +100,73 @@ export default function McpManager({ servers, onServersChange }: McpManagerProps
     setIsOpen(false);
   };
 
+  const fetchAuthInfo = async (rawServerUrl: string) => {
+    const trimmed = rawServerUrl.trim();
+    if (!trimmed) {
+      setAuthInfo(null);
+      setAuthInfoError('');
+      return null;
+    }
+
+    let origin: string | null = null;
+    try {
+      const parsed = new URL(trimmed);
+      origin = `${parsed.protocol}//${parsed.host}`;
+    } catch {
+      setAuthInfo(null);
+      setAuthInfoError('Server URL is not a valid absolute URL.');
+      return null;
+    }
+
+    setIsAuthInfoLoading(true);
+    setAuthInfoError('');
+
+    try {
+      const response = await fetch(`${origin}/auth/info`, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Server returned ${response.status}`);
+      }
+
+      const data: McpAuthInfo = await response.json();
+      setAuthInfo(data);
+      return data;
+    } catch (err: any) {
+      const message = err?.message || 'Unable to fetch auth info from server.';
+      setAuthInfo(null);
+      setAuthInfoError(message);
+      return null;
+    } finally {
+      setIsAuthInfoLoading(false);
+    }
+  };
+
   const handleConnectorSelect = (id: string) => {
     const definition = MCP_CONNECTOR_CATALOG.find((item) => item.id === id);
+    setAuthInfo(null);
+    setAuthInfoError('');
     setDraft((prev) => ({
       ...prev,
       connectorId: id,
       category: definition?.category ?? prev.category,
-      serverUrl: definition?.serverUrl ?? prev.serverUrl,
+      serverUrl: definition?.serverUrl ?? '',
       headers: definition?.defaultHeaders
         ? Object.entries(definition.defaultHeaders).map(([key, value]) => ({
             id: uuidv4(),
             key,
             value,
           }))
-        : prev.headers,
+        : [],
     }));
+
+    if (definition?.serverUrl) {
+      void fetchAuthInfo(definition.serverUrl);
+    }
   };
 
   const handleHeaderChange = (headerId: string, field: 'key' | 'value', value: string) => {
@@ -219,6 +278,34 @@ export default function McpManager({ servers, onServersChange }: McpManagerProps
 
   const handleDelete = (id: string) => {
     onServersChange(servers.filter((server) => server.id !== id));
+  };
+
+  const handleAuthorize = async () => {
+    let authorizeUrl = authInfo?.authorize_url;
+
+    if (!authorizeUrl && draft.serverUrl) {
+      const result = await fetchAuthInfo(draft.serverUrl);
+      authorizeUrl = result?.authorize_url;
+    }
+
+    if (!authorizeUrl) {
+      authorizeUrl = currentDefinition?.authUrl;
+    }
+
+    if (!authorizeUrl) {
+      setAuthInfoError('Unable to determine authorization URL. Check /auth/info on the server.');
+      return;
+    }
+
+    window.open(authorizeUrl, '_blank', 'noopener,noreferrer');
+  };
+
+  const handleCheckAuth = () => {
+    if (!draft.serverUrl) {
+      setAuthInfoError('Enter the server URL first.');
+      return;
+    }
+    void fetchAuthInfo(draft.serverUrl);
   };
 
   return (
@@ -470,22 +557,75 @@ export default function McpManager({ servers, onServersChange }: McpManagerProps
 
               {error && <p className="text-sm text-red-600">{error}</p>}
 
-              <div className="flex justify-end gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={handleClose}
-                  className="px-4 py-2 text-gray-600 hover:text-gray-800"
-                  disabled={isTesting}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-gray-900 text-white rounded-md hover:bg-gray-800 disabled:opacity-70"
-                  disabled={isTesting}
-                >
-                  {isTesting ? 'Testing…' : 'Save server'}
-                </button>
+              {(authInfo || authInfoError) && (
+                <div className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-600">
+                  {authInfo && (
+                    <div className="space-y-1">
+                      {authInfo.mode && (
+                        <p className="text-gray-700">
+                          Detected auth mode: <span className="font-medium">{authInfo.mode}</span>
+                        </p>
+                      )}
+                      {authInfo.authorize_url && (
+                        <p className="break-all">
+                          authorize_url: <span className="font-mono text-[11px]">{authInfo.authorize_url}</span>
+                        </p>
+                      )}
+                      {authInfo.token_url && (
+                        <p className="break-all">
+                          token_url: <span className="font-mono text-[11px]">{authInfo.token_url}</span>
+                        </p>
+                      )}
+                    </div>
+                  )}
+                  {authInfoError && (
+                    <p className="text-red-600">{authInfoError}</p>
+                  )}
+                </div>
+              )}
+
+              <div className="flex flex-col items-end gap-2 pt-2">
+                <div className="flex justify-end gap-3 w-full md:w-auto">
+                  <button
+                    type="button"
+                    onClick={handleCheckAuth}
+                    className="px-4 py-2 text-sm text-gray-700 underline-offset-2 hover:underline disabled:text-gray-400"
+                    disabled={isAuthInfoLoading}
+                  >
+                    {isAuthInfoLoading ? 'Checking auth…' : 'Check auth configuration'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleClose}
+                    className="px-4 py-2 text-gray-600 hover:text-gray-800"
+                    disabled={isTesting}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-4 py-2 bg-gray-900 text-white rounded-md hover:bg-gray-800 disabled:opacity-70"
+                    disabled={isTesting}
+                  >
+                    {isTesting ? 'Testing…' : 'Save server'}
+                  </button>
+                </div>
+                {(currentDefinition?.authUrl || authInfo?.authorize_url) && (
+                  <div className="flex flex-col items-end gap-1">
+                    <button
+                      type="button"
+                      onClick={handleAuthorize}
+                      className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-100"
+                    >
+                      {currentDefinition?.authButtonLabel ?? 'Authorize connector'}
+                    </button>
+                    {(currentDefinition?.authHelpText || authInfo?.mode) && (
+                      <p className="text-xs text-gray-500 text-right max-w-sm">
+                        {currentDefinition?.authHelpText ?? `Detected ${authInfo?.mode ?? 'authentication'} flow from /auth/info. Complete the browser flow and copy any tokens the server returns.`}
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
             </form>
             </div>

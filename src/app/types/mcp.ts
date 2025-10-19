@@ -9,6 +9,16 @@ export interface McpConnectorDefinition {
   documentationUrl?: string;
   requiresAuthHeaders?: boolean;
   defaultHeaders?: Record<string, string>;
+  authUrl?: string;
+  authButtonLabel?: string;
+  authHelpText?: string;
+}
+
+export interface McpAuthInfo {
+  authorize_url?: string;
+  token_url?: string;
+  mode?: string;
+  [key: string]: unknown;
 }
 
 export interface McpServerHeader {
