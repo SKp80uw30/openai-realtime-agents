@@ -576,6 +576,9 @@ export default function McpManager({ servers, onServersChange }: McpManagerProps
                 <div className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-600">
                   {authInfo && (
                     <div className="space-y-1">
+                      {authInfo.source && (
+                        <p className="text-gray-500">Metadata source: {authInfo.source}</p>
+                      )}
                       {authInfo.mode && (
                         <p className="text-gray-700">
                           Detected auth mode: <span className="font-medium">{authInfo.mode}</span>

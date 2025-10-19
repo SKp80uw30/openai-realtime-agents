@@ -19,6 +19,8 @@ export interface McpAuthInfo {
   token_url?: string;
   mode?: string;
   [key: string]: unknown;
+  raw?: unknown;
+  source?: string;
 }
 
 export interface McpServerHeader {
