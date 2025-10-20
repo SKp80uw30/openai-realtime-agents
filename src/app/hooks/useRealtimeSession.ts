@@ -43,25 +43,57 @@ export function useRealtimeSession(callbacks: RealtimeSessionCallbacks = {}) {
 
   const historyHandlersRef = useHandleSessionHistory();
 
+  const latestResponseIdRef = useRef<string | null>(null);
+  const pendingMcpApprovalRef = useRef<Map<string, { responseId: string; outputIndex?: number }>>(new Map());
+
   const handleTransportEvent = useCallback((event: any) => {
     // Handle additional server events that aren't managed by the session
     switch (event.type) {
-      case "conversation.item.input_audio_transcription.completed": {
+      case 'response.created': {
+        if (typeof event.response?.id === 'string') {
+          latestResponseIdRef.current = event.response.id;
+        }
+        logServerEvent(event);
+        break;
+      }
+      case 'response.output_item.added': {
+        const responseId: string | undefined = event.response_id ?? latestResponseIdRef.current ?? undefined;
+        const itemType = event.item?.type;
+        if (itemType === 'mcp_approval_request' && typeof event.item?.id === 'string' && responseId) {
+          pendingMcpApprovalRef.current.set(event.item.id, {
+            responseId,
+            outputIndex: typeof event.output_index === 'number' ? event.output_index : undefined,
+          });
+          logServerEvent({
+            type: 'agent.mcp_approval.pending',
+            approval_id: event.item.id,
+            response_id: responseId,
+            output_index: event.output_index,
+            name: event.item?.name,
+            server_label: event.item?.server_label,
+          });
+        } else if (itemType === 'mcp_call' && typeof event.item?.id === 'string' && responseId) {
+          latestResponseIdRef.current = responseId;
+        }
+        logServerEvent(event);
+        break;
+      }
+      case 'conversation.item.input_audio_transcription.completed': {
         historyHandlersRef.current.handleTranscriptionCompleted(event);
         break;
       }
-      case "response.audio_transcript.done": {
+      case 'response.audio_transcript.done': {
         historyHandlersRef.current.handleTranscriptionCompleted(event);
         break;
       }
-      case "response.audio_transcript.delta": {
+      case 'response.audio_transcript.delta': {
         historyHandlersRef.current.handleTranscriptionDelta(event);
         break;
       }
       default: {
         logServerEvent(event);
         break;
-      } 
+      }
     }
   }, [historyHandlersRef, logServerEvent]);
 
@@ -143,6 +175,54 @@ export function useRealtimeSession(callbacks: RealtimeSessionCallbacks = {}) {
     };
     const historyAddedListener = (item: any) => {
       historyHandlersRef.current.handleHistoryAdded(item);
+
+      if (item?.type === 'mcp_approval_request' && typeof item.id === 'string') {
+        const approvalId = item.id;
+        const match = pendingMcpApprovalRef.current.get(approvalId);
+        const responseId = match?.responseId ?? latestResponseIdRef.current;
+
+        if (session && typeof responseId === 'string') {
+          const approvalEvent = {
+            type: 'response.output_item.create',
+            response_id: responseId,
+            item: {
+              type: 'mcp_approval_response',
+              approval_request_id: approvalId,
+              approve: true,
+            },
+          } as const;
+
+          try {
+            session.transport.sendEvent(approvalEvent as any);
+            logServerEvent({
+              type: 'agent.mcp_approval.auto_sent',
+              response_id: responseId,
+              approval_id: approvalId,
+            });
+
+            if (typeof match?.outputIndex === 'number') {
+              session.transport.sendEvent({
+                type: 'response.output_item.done',
+                response_id: responseId,
+                output_index: match.outputIndex,
+              } as any);
+            }
+          } catch (error: any) {
+            logServerEvent({
+              type: 'agent.mcp_approval.error',
+              approval_id: approvalId,
+              error: error?.message ?? error,
+            });
+          } finally {
+            pendingMcpApprovalRef.current.delete(approvalId);
+          }
+        } else {
+          logServerEvent({
+            type: 'agent.mcp_approval.missing_response',
+            approval_id: approvalId,
+          });
+        }
+      }
     };
     const guardrailListener = (details: any, agent: any, guardrail: any) => {
       historyHandlersRef.current.handleGuardrailTripped(details, agent, guardrail);
