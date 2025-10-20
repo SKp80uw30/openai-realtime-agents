@@ -45,7 +45,7 @@ export function useRealtimeSession(callbacks: RealtimeSessionCallbacks = {}) {
 
   const latestResponseIdRef = useRef<string | null>(null);
   const pendingMcpApprovalRef = useRef<Map<string, { responseId: string; outputIndex?: number }>>(new Map());
-  const pendingMcpCallsRef = useRef<Map<string, { callId: string; toolName: string; serverLabel: string; outputIndex?: number }>>(new Map());
+  const pendingMcpCallsRef = useRef<Map<string, { callId: string; toolName: string; serverLabel: string; outputIndex?: number; logged: boolean }>>(new Map());
 
   const handleTransportEvent = useCallback((event: any) => {
     // Handle additional server events that aren't managed by the session
@@ -81,6 +81,7 @@ export function useRealtimeSession(callbacks: RealtimeSessionCallbacks = {}) {
             toolName: event.item?.name,
             serverLabel: event.item?.server_label,
             outputIndex: typeof event.output_index === 'number' ? event.output_index : undefined,
+            logged: false,
           });
         }
         logServerEvent(event);
@@ -91,7 +92,7 @@ export function useRealtimeSession(callbacks: RealtimeSessionCallbacks = {}) {
         const callId = event.item_id;
         const pendingCall = pendingMcpCallsRef.current.get(callId);
 
-        if (pendingCall) {
+        if (pendingCall && !pendingCall.logged) {
           const mcpCallDetails = {
             type: 'agent.mcp_call.initiated',
             mcp_call_id: callId,
@@ -103,6 +104,45 @@ export function useRealtimeSession(callbacks: RealtimeSessionCallbacks = {}) {
           };
           logServerEvent(mcpCallDetails);
           historyHandlersRef.current.handleMcpCallInitiated(mcpCallDetails);
+
+          // Mark as logged to prevent duplicates
+          pendingCall.logged = true;
+        }
+        logServerEvent(event);
+        break;
+      }
+      case 'response.done': {
+        // Check if there are any MCP calls that never completed
+        const responseId = event.response?.id;
+        if (responseId) {
+          pendingMcpCallsRef.current.forEach((call, callId) => {
+            if (call.logged) {
+              // This MCP call was initiated but never completed
+              logServerEvent({
+                type: 'agent.mcp_call.abandoned',
+                mcp_call_id: callId,
+                response_id: responseId,
+                tool_name: call.toolName,
+                server_label: call.serverLabel,
+                warning: 'response.done fired but no response.output_item.done received for this MCP call',
+              });
+
+              // Log as completed with null to trigger warning in UI
+              historyHandlersRef.current.handleMcpCallCompleted({
+                type: 'agent.mcp_call.completed',
+                mcp_call_id: callId,
+                response_id: responseId,
+                output_index: call.outputIndex,
+                tool_name: call.toolName,
+                server_label: call.serverLabel,
+                output: null,
+                error: null,
+                status: 'abandoned',
+              });
+
+              pendingMcpCallsRef.current.delete(callId);
+            }
+          });
         }
         logServerEvent(event);
         break;
