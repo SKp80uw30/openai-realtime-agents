@@ -21,6 +21,42 @@ Commit messages follow short, imperative phrases (`Add calendar tool logging`). 
 ## Agent & MCP Integration Tips
 When adding an agent, export it from `src/app/agentConfigs/index.ts`, provide clear instructions, and register downstream handoffs. Use the MCP Servers modal to verify connectors; watch the Logs panel for `agent.tool_start`/`agent.tool_end` events to confirm tool usage. For Google Workspace OAuth, follow the checklist in `docs/google-workspace-oauth-flow.md` to ensure tokens persist and tools appear in `mcp_list_tools.completed`.
 
+## Google Workspace MCP Integration
+
+The project uses the Workspace MCP server (https://workspacemcp.com/) for Google Calendar, Gmail, and Slack integration.
+
+### Key Requirements from Workspace MCP
+
+**Create Event Tool (`create_event`):**
+- **Required**: `summary`, `start_time`, `end_time`
+- **Optional**: `calendar_id` (defaults to primary), `description`, `location`, `attendees`, `timezone`
+- **Date Format**: RFC3339 or YYYY-MM-DD
+- **Timezone**: Optional parameter, but recommended for accuracy
+
+**Environment Variables (MCP Server):**
+```bash
+MCP_ENABLE_OAUTH21=true                    # Enable OAuth 2.1 multi-user mode
+WORKSPACE_MCP_STATELESS_MODE=true          # For cloud deployments
+WORKSPACE_EXTERNAL_URL=https://...         # Public MCP server URL
+GOOGLE_OAUTH_CLIENT_ID=...                 # From Google Cloud Console
+GOOGLE_OAUTH_CLIENT_SECRET=...             # From Google Cloud Console
+```
+
+**Google Cloud Console Requirements:**
+- Calendar API enabled
+- OAuth 2.0 Web Application client
+- Authorized redirect URIs must include MCP server URL + `/oauth2callback`
+- Scopes: Calendar, Gmail, Drive (as needed)
+
+### Common Date/Time Issues
+
+The agent might generate arguments in formats that don't match Workspace MCP expectations:
+
+1. **Missing timezone** - If `timezone` not specified, defaults to calendar's timezone
+2. **ISO vs RFC3339** - Ensure timestamps include timezone offset (e.g., `2025-10-22T15:00:00+11:00`)
+3. **All-day events** - Use YYYY-MM-DD format without time component
+4. **Relative dates** - Agent saying "tomorrow" must convert to explicit date
+
 ## Debugging MCP Tool Calls
 
 ### Frontend Logging
