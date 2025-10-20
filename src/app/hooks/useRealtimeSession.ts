@@ -114,6 +114,7 @@ export function useRealtimeSession(callbacks: RealtimeSessionCallbacks = {}) {
     const agentToolStartListener = (details: any, agent: any, functionCall: any) => {
       logServerEvent({
         type: 'agent.tool_start',
+        event_id: functionCall?.call_id,
         agent: agent?.name ?? agent?.id ?? 'unknown-agent',
         tool_name: functionCall?.name,
         arguments: functionCall?.arguments,
@@ -129,6 +130,7 @@ export function useRealtimeSession(callbacks: RealtimeSessionCallbacks = {}) {
     ) => {
       logServerEvent({
         type: 'agent.tool_end',
+        event_id: functionCall?.call_id,
         agent: agent?.name ?? agent?.id ?? 'unknown-agent',
         tool_name: functionCall?.name,
         call_id: functionCall?.call_id,

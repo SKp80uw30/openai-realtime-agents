@@ -18,18 +18,36 @@ export const EventProvider: FC<PropsWithChildren> = ({ children }) => {
   const [loggedEvents, setLoggedEvents] = useState<LoggedEvent[]>([]);
 
   function addLoggedEvent(direction: "client" | "server", eventName: string, eventData: Record<string, any>) {
-    const id = eventData.event_id || uuidv4();
-    setLoggedEvents((prev) => [
-      ...prev,
-      {
-        id,
-        direction,
-        eventName,
-        eventData,
-        timestamp: new Date().toLocaleTimeString(),
-        expanded: false,
-      },
-    ]);
+    const id = eventData.event_id || eventData.id || uuidv4();
+
+    setLoggedEvents((prev) => {
+      const existing = prev.find((log) => log.id === id);
+      if (existing) {
+        return prev.map((log) =>
+          log.id === id
+            ? {
+                ...log,
+                direction,
+                eventName,
+                eventData,
+                timestamp: new Date().toLocaleTimeString(),
+              }
+            : log,
+        );
+      }
+
+      return [
+        ...prev,
+        {
+          id,
+          direction,
+          eventName,
+          eventData,
+          timestamp: new Date().toLocaleTimeString(),
+          expanded: false,
+        },
+      ];
+    });
   }
 
   const logClientEvent: EventContextValue["logClientEvent"] = (eventObj, eventNameSuffix = "") => {
