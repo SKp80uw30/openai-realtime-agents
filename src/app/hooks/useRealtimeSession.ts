@@ -45,6 +45,7 @@ export function useRealtimeSession(callbacks: RealtimeSessionCallbacks = {}) {
 
   const latestResponseIdRef = useRef<string | null>(null);
   const pendingMcpApprovalRef = useRef<Map<string, { responseId: string; outputIndex?: number }>>(new Map());
+  const pendingMcpCallsRef = useRef<Map<string, { callId: string; toolName: string; serverLabel: string; outputIndex?: number }>>(new Map());
 
   const handleTransportEvent = useCallback((event: any) => {
     // Handle additional server events that aren't managed by the session
@@ -74,15 +75,31 @@ export function useRealtimeSession(callbacks: RealtimeSessionCallbacks = {}) {
           });
         } else if (itemType === 'mcp_call' && typeof event.item?.id === 'string' && responseId) {
           latestResponseIdRef.current = responseId;
-          // Log MCP call details
+          // Store pending MCP call - arguments will arrive in response.mcp_call_arguments.done
+          pendingMcpCallsRef.current.set(event.item.id, {
+            callId: event.item.id,
+            toolName: event.item?.name,
+            serverLabel: event.item?.server_label,
+            outputIndex: typeof event.output_index === 'number' ? event.output_index : undefined,
+          });
+        }
+        logServerEvent(event);
+        break;
+      }
+      case 'response.mcp_call_arguments.done': {
+        // Arguments are now available for the MCP call
+        const callId = event.item_id;
+        const pendingCall = pendingMcpCallsRef.current.get(callId);
+
+        if (pendingCall) {
           const mcpCallDetails = {
             type: 'agent.mcp_call.initiated',
-            mcp_call_id: event.item.id,
-            response_id: responseId,
-            output_index: event.output_index,
-            tool_name: event.item?.name,
-            server_label: event.item?.server_label,
-            arguments: event.item?.arguments,
+            mcp_call_id: callId,
+            response_id: event.response_id ?? latestResponseIdRef.current,
+            output_index: pendingCall.outputIndex,
+            tool_name: pendingCall.toolName,
+            server_label: pendingCall.serverLabel,
+            arguments: event.arguments,
           };
           logServerEvent(mcpCallDetails);
           historyHandlersRef.current.handleMcpCallInitiated(mcpCallDetails);
@@ -107,6 +124,11 @@ export function useRealtimeSession(callbacks: RealtimeSessionCallbacks = {}) {
           };
           logServerEvent(mcpResultDetails);
           historyHandlersRef.current.handleMcpCallCompleted(mcpResultDetails);
+
+          // Clean up pending call
+          if (event.item?.id) {
+            pendingMcpCallsRef.current.delete(event.item.id);
+          }
         }
         logServerEvent(event);
         break;
