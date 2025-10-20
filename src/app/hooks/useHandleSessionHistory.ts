@@ -142,6 +142,34 @@ export function useHandleSessionHistory() {
     );
   }, [addTranscriptBreadcrumb]);
 
+  const handleMcpCallInitiated = useCallback((callDetails: any) => {
+    addTranscriptBreadcrumb(
+      `MCP call: ${callDetails.tool_name}`,
+      {
+        server: callDetails.server_label,
+        arguments: callDetails.arguments,
+        call_id: callDetails.mcp_call_id,
+      }
+    );
+  }, [addTranscriptBreadcrumb]);
+
+  const handleMcpCallCompleted = useCallback((callDetails: any) => {
+    const hasOutput = callDetails.output !== null && callDetails.output !== undefined;
+    const hasError = callDetails.error !== null && callDetails.error !== undefined;
+
+    addTranscriptBreadcrumb(
+      `MCP result: ${callDetails.tool_name}`,
+      {
+        server: callDetails.server_label,
+        output: callDetails.output,
+        error: callDetails.error,
+        status: callDetails.status,
+        call_id: callDetails.mcp_call_id,
+        warning: !hasOutput && !hasError ? 'Both output and error are null - MCP server may have failed silently' : undefined,
+      }
+    );
+  }, [addTranscriptBreadcrumb]);
+
   const handleHistoryAdded = useCallback((item: any) => {
     console.log("[handleHistoryAdded] ", item);
     if (!item || item.type !== 'message') return;
@@ -245,6 +273,8 @@ export function useHandleSessionHistory() {
     () => ({
       handleAgentToolStart,
       handleAgentToolEnd,
+      handleMcpCallInitiated,
+      handleMcpCallCompleted,
       handleHistoryUpdated,
       handleHistoryAdded,
       handleTranscriptionDelta,
@@ -254,6 +284,8 @@ export function useHandleSessionHistory() {
     [
       handleAgentToolStart,
       handleAgentToolEnd,
+      handleMcpCallInitiated,
+      handleMcpCallCompleted,
       handleHistoryUpdated,
       handleHistoryAdded,
       handleTranscriptionDelta,

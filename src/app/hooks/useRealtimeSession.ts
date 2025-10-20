@@ -74,6 +74,39 @@ export function useRealtimeSession(callbacks: RealtimeSessionCallbacks = {}) {
           });
         } else if (itemType === 'mcp_call' && typeof event.item?.id === 'string' && responseId) {
           latestResponseIdRef.current = responseId;
+          // Log MCP call details
+          const mcpCallDetails = {
+            type: 'agent.mcp_call.initiated',
+            mcp_call_id: event.item.id,
+            response_id: responseId,
+            output_index: event.output_index,
+            tool_name: event.item?.name,
+            server_label: event.item?.server_label,
+            arguments: event.item?.arguments,
+          };
+          logServerEvent(mcpCallDetails);
+          historyHandlersRef.current.handleMcpCallInitiated(mcpCallDetails);
+        }
+        logServerEvent(event);
+        break;
+      }
+      case 'response.output_item.done': {
+        const itemType = event.item?.type;
+        if (itemType === 'mcp_call') {
+          // Log MCP call result to catch null responses
+          const mcpResultDetails = {
+            type: 'agent.mcp_call.completed',
+            mcp_call_id: event.item?.id,
+            response_id: event.response_id,
+            output_index: event.output_index,
+            tool_name: event.item?.name,
+            server_label: event.item?.server_label,
+            output: event.item?.output,
+            error: event.item?.error,
+            status: event.item?.status,
+          };
+          logServerEvent(mcpResultDetails);
+          historyHandlersRef.current.handleMcpCallCompleted(mcpResultDetails);
         }
         logServerEvent(event);
         break;
