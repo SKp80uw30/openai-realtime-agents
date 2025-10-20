@@ -24,9 +24,15 @@ type StatusState =
 function getSessionData(state: string): StoredAuthSession | null {
   if (typeof window === "undefined") return null;
   try {
-    const raw = window.sessionStorage.getItem(`mcp_oauth_state_${state}`);
+    const storage = window.localStorage;
+    const raw = storage.getItem(`mcp_oauth_state_${state}`);
     if (!raw) return null;
-    return JSON.parse(raw) as StoredAuthSession;
+    const parsed = JSON.parse(raw) as StoredAuthSession;
+    if (typeof parsed.createdAt === "number" && Date.now() - parsed.createdAt > 15 * 60 * 1000) {
+      storage.removeItem(`mcp_oauth_state_${state}`);
+      return null;
+    }
+    return parsed;
   } catch {
     return null;
   }
@@ -34,7 +40,7 @@ function getSessionData(state: string): StoredAuthSession | null {
 
 function clearSessionData(state: string) {
   if (typeof window === "undefined") return;
-  window.sessionStorage.removeItem(`mcp_oauth_state_${state}`);
+  window.localStorage.removeItem(`mcp_oauth_state_${state}`);
 }
 
 export default function OAuthCallbackClient() {
