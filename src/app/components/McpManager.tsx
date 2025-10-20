@@ -295,24 +295,71 @@ export default function McpManager({ servers, onServersChange }: McpManagerProps
     onServersChange(servers.filter((server) => server.id !== id));
   };
 
+  const normalizeHeadersForRequest = () =>
+    draft.headers
+      .filter((header) => header.key && header.value)
+      .map((header) => ({ id: header.id, key: header.key.trim(), value: header.value.trim() }));
+
   const handleAuthorize = async () => {
-    let authorizeUrl = authInfo?.authorize_url;
-
-    if (!authorizeUrl && draft.serverUrl) {
-      const result = await fetchAuthInfo(draft.serverUrl);
-      authorizeUrl = result?.authorize_url;
-    }
-
-    if (!authorizeUrl) {
-      authorizeUrl = currentDefinition?.authUrl;
-    }
-
-    if (!authorizeUrl) {
-      setAuthInfoError('Unable to determine authorization URL. Check /auth/info on the server.');
+    if (!draft.serverUrl) {
+      setAuthInfoError('Enter the server URL first.');
       return;
     }
 
-    window.open(authorizeUrl, '_blank', 'noopener,noreferrer');
+    setAuthInfoError('');
+
+    try {
+      const response = await fetch('/api/mcp/start-auth', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          serverUrl: draft.serverUrl,
+          headers: normalizeHeadersForRequest(),
+          serviceName: currentDefinition?.name ?? 'Google Workspace',
+        }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data?.error || 'Failed to start authorization flow.');
+      }
+
+      if (typeof data?.message === 'string') {
+        setAuthInfo((prev) => ({
+          ...(prev || {}),
+          raw: data.message,
+        }));
+      }
+
+      const urlFromTool: string | undefined = data?.authUrl;
+
+      if (urlFromTool) {
+        window.open(urlFromTool, '_blank', 'noopener,noreferrer');
+        setAuthInfo((prev) => ({
+          ...(prev || {}),
+          authorize_url: urlFromTool,
+        }));
+        return;
+      }
+
+      // Fallback to metadata-derived URLs
+      let authorizeUrl = authInfo?.authorize_url;
+      if (!authorizeUrl) {
+        const result = await fetchAuthInfo(draft.serverUrl);
+        authorizeUrl = result?.authorize_url;
+      }
+      if (!authorizeUrl) {
+        authorizeUrl = currentDefinition?.authUrl;
+      }
+      if (!authorizeUrl) {
+        throw new Error('Unable to determine authorization URL.');
+      }
+      window.open(authorizeUrl, '_blank', 'noopener,noreferrer');
+    } catch (err: any) {
+      setAuthInfoError(err?.message || 'Failed to launch authorization.');
+    }
   };
 
   const handleCheckAuth = () => {
