@@ -580,8 +580,8 @@ export default function McpManager({ servers, onServersChange }: McpManagerProps
       )}
 
       {isOpen && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/20">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl p-6">
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/20 px-4 py-6 overflow-y-auto">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl p-6 max-h-[90vh] overflow-y-auto flex flex-col">
             <div className="flex justify-between items-start mb-4">
               <div>
                 <h2 className="text-xl font-semibold">Add MCP Server</h2>
