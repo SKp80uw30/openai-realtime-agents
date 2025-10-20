@@ -408,16 +408,18 @@ export default function McpManager({ servers, onServersChange }: McpManagerProps
           ? (rawMetadata.scopes_supported as string[])
           : null;
 
-      const fallbackScopes = currentDefinition?.id === 'google-workspace-mcp'
-        ? [
-            'openid',
-            'https://www.googleapis.com/auth/userinfo.email',
-            'https://www.googleapis.com/auth/userinfo.profile',
-            'https://www.googleapis.com/auth/calendar.events',
-          ]
-        : ['openid', 'https://www.googleapis.com/auth/userinfo.email', 'https://www.googleapis.com/auth/userinfo.profile'];
+      const defaultScopes = ['openid', 'https://www.googleapis.com/auth/userinfo.email', 'https://www.googleapis.com/auth/userinfo.profile'];
+      const workspaceExtras = currentDefinition?.id === 'google-workspace-mcp'
+        ? ['https://www.googleapis.com/auth/calendar.events']
+        : [];
 
-      const scopes = metadataScopes ?? fallbackScopes;
+      const scopes = Array.from(
+        new Set([
+          ...defaultScopes,
+          ...workspaceExtras,
+          ...(metadataScopes ?? []),
+        ]),
+      );
 
       const authorizeParams = new URLSearchParams({
         response_type: 'code',
