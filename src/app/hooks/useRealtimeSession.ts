@@ -273,47 +273,50 @@ export function useRealtimeSession(callbacks: RealtimeSessionCallbacks = {}) {
 
       if (item?.type === 'mcp_approval_request' && typeof item.id === 'string') {
         const approvalId = item.id;
-        const match = pendingMcpApprovalRef.current.get(approvalId);
-        const responseId = match?.responseId ?? latestResponseIdRef.current;
 
-        if (session && typeof responseId === 'string') {
-          const approvalEvent = {
-            type: 'response.output_item.create',
-            response_id: responseId,
-            item: {
-              type: 'mcp_approval_response',
-              approval_request_id: approvalId,
-              approve: true,
-            },
-          } as const;
+        logServerEvent({
+          type: 'agent.mcp_approval.request_received',
+          approval_id: approvalId,
+          tool_name: item.name,
+          server_label: item.server_label,
+        });
 
+        if (session) {
           try {
-            session.transport.sendEvent(approvalEvent as any);
+            // Send approval response as a conversation item
+            session.transport.sendEvent({
+              type: 'conversation.item.create',
+              item: {
+                type: 'mcp_approval_response',
+                approval_request_id: approvalId,
+                approve: true,
+              },
+            } as any);
+
             logServerEvent({
-              type: 'agent.mcp_approval.auto_sent',
-              response_id: responseId,
+              type: 'agent.mcp_approval.auto_approved',
               approval_id: approvalId,
             });
 
-            if (typeof match?.outputIndex === 'number') {
-              session.transport.sendEvent({
-                type: 'response.output_item.done',
-                response_id: responseId,
-                output_index: match.outputIndex,
-              } as any);
-            }
+            // Trigger a new response to execute the approved call
+            session.transport.sendEvent({
+              type: 'response.create',
+            } as any);
+
+            logServerEvent({
+              type: 'agent.mcp_approval.response_triggered',
+              approval_id: approvalId,
+            });
           } catch (error: any) {
             logServerEvent({
               type: 'agent.mcp_approval.error',
               approval_id: approvalId,
               error: error?.message ?? error,
             });
-          } finally {
-            pendingMcpApprovalRef.current.delete(approvalId);
           }
         } else {
           logServerEvent({
-            type: 'agent.mcp_approval.missing_response',
+            type: 'agent.mcp_approval.no_session',
             approval_id: approvalId,
           });
         }
