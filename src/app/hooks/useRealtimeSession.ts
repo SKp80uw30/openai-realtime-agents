@@ -112,6 +112,13 @@ export function useRealtimeSession(callbacks: RealtimeSessionCallbacks = {}) {
     };
 
     const agentToolStartListener = (details: any, agent: any, functionCall: any) => {
+      logServerEvent({
+        type: 'agent.tool_start',
+        agent: agent?.name ?? agent?.id ?? 'unknown-agent',
+        tool_name: functionCall?.name,
+        arguments: functionCall?.arguments,
+        call_id: functionCall?.call_id,
+      }, '(start)');
       historyHandlersRef.current.handleAgentToolStart(details, agent, functionCall);
     };
     const agentToolEndListener = (
@@ -120,6 +127,13 @@ export function useRealtimeSession(callbacks: RealtimeSessionCallbacks = {}) {
       functionCall: any,
       result: any,
     ) => {
+      logServerEvent({
+        type: 'agent.tool_end',
+        agent: agent?.name ?? agent?.id ?? 'unknown-agent',
+        tool_name: functionCall?.name,
+        call_id: functionCall?.call_id,
+        result,
+      }, '(end)');
       historyHandlersRef.current.handleAgentToolEnd(details, agent, functionCall, result);
     };
     const historyUpdatedListener = (items: any[]) => {

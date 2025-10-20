@@ -60,6 +60,7 @@ pointing at the public Railway domain.
 | 5 | Popup closes manually or via button | Parent window receives `mcp-oauth-complete` message and re-enables button | In parent tab DevTools console: `window.addEventListener('message', console.log);` should show event with `token`. |
 | 6 | Modal updates header list | A new header row appears: `Authorization` / `Bearer <token>` | Visual check; `draft.headers` now includes the bearer token. |
 | 7 | Click **Save server** | `/api/mcp/list-tools` succeeds and chip shows `connected` | Network tab: POST `/api/mcp/list-tools` returns 200. |
+| 8 | Begin conversation | Logs panel shows `agent.tool_start` / `agent.tool_end` entries whenever the assistant uses an MCP tool | Useful for debugging tool usage and arguments. |
 
 If any step fails, use the checkpoints below.
 
@@ -124,4 +125,3 @@ If any step fails, use the checkpoints below.
 - Do we want to surface success/error toasts for the OAuth completion message?
 - After token exchange we only store the access token; if refresh token handling
   is desired we can extend the backend proxies accordingly.
-
