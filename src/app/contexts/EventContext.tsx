@@ -56,6 +56,15 @@ export const EventProvider: FC<PropsWithChildren> = ({ children }) => {
   };
 
   const logServerEvent: EventContextValue["logServerEvent"] = (eventObj, eventNameSuffix = "") => {
+    const noisyDeltaTypes = new Set([
+      'conversation.item.input_audio_transcription.delta',
+      'response.text.delta',
+      'response.mcp_call_arguments.delta',
+      'response.mcp_call_function.delta',
+    ] as const);
+
+    if (noisyDeltaTypes.has(eventObj.type as any)) return;
+
     const name = `${eventObj.type || ""} ${eventNameSuffix || ""}`.trim();
     addLoggedEvent("server", name, eventObj);
   };
