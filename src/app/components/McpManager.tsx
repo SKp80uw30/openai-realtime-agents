@@ -432,10 +432,23 @@ export default function McpManager({ servers, onServersChange }: McpManagerProps
       };
 
       try {
-        window.sessionStorage.setItem(
-          `mcp_oauth_state_${state}`,
-          JSON.stringify(sessionPayload),
-        );
+        const storage = window.localStorage;
+        storage.setItem(`mcp_oauth_state_${state}`, JSON.stringify(sessionPayload));
+
+        // Clean up any stale sessions (older than 15 minutes)
+        const now = Date.now();
+        for (let i = 0; i < storage.length; i += 1) {
+          const key = storage.key(i);
+          if (!key || !key.startsWith('mcp_oauth_state_')) continue;
+          try {
+            const stored = JSON.parse(storage.getItem(key) || '{}') as { createdAt?: number };
+            if (typeof stored.createdAt === 'number' && now - stored.createdAt > 15 * 60 * 1000) {
+              storage.removeItem(key);
+            }
+          } catch {
+            storage.removeItem(key);
+          }
+        }
       } catch {
         // Ignore storage failures; callback will fail gracefully if data missing
       }
