@@ -102,7 +102,7 @@ export function useRealtimeSession(callbacks: RealtimeSessionCallbacks = {}) {
 
   useEffect(() => {
     const session = sessionRef.current;
-    if (!session) return;
+    if (!session || status !== 'CONNECTED') return;
 
     const errorListener = (...args: any[]) => {
       logServerEvent({
@@ -147,6 +147,25 @@ export function useRealtimeSession(callbacks: RealtimeSessionCallbacks = {}) {
     const guardrailListener = (details: any, agent: any, guardrail: any) => {
       historyHandlersRef.current.handleGuardrailTripped(details, agent, guardrail);
     };
+    const toolApprovalListener = async (
+      _context: any,
+      _agent: any,
+      approval: any,
+    ) => {
+      try {
+        await session.approve(approval.approvalItem, { alwaysApprove: true });
+        logServerEvent({
+          type: 'agent.tool_approval.auto_approved',
+          tool_name: approval?.tool?.name,
+        });
+      } catch (error: any) {
+        logServerEvent({
+          type: 'agent.tool_approval.error',
+          tool_name: approval?.tool?.name,
+          error: error?.message ?? error,
+        });
+      }
+    };
 
     session.on('error', errorListener);
     session.on('agent_handoff', handleAgentHandoff);
@@ -156,6 +175,7 @@ export function useRealtimeSession(callbacks: RealtimeSessionCallbacks = {}) {
     session.on('history_added', historyAddedListener);
     session.on('guardrail_tripped', guardrailListener);
     session.on('transport_event', handleTransportEvent);
+    session.on('tool_approval_requested', toolApprovalListener);
 
     return () => {
       session.off('error', errorListener);
@@ -166,8 +186,9 @@ export function useRealtimeSession(callbacks: RealtimeSessionCallbacks = {}) {
       session.off('history_added', historyAddedListener);
       session.off('guardrail_tripped', guardrailListener);
       session.off('transport_event', handleTransportEvent);
+      session.off('tool_approval_requested', toolApprovalListener);
     };
-  }, [handleAgentHandoff, handleTransportEvent, historyHandlersRef, logServerEvent]);
+  }, [handleAgentHandoff, handleTransportEvent, historyHandlersRef, logServerEvent, status]);
 
   const connect = useCallback(
     async ({
