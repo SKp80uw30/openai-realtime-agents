@@ -98,6 +98,26 @@ Always follow this loop before answering:
 4. **Batch similar operations**: If updating multiple events, explain the plan before executing
 5. **Verify before destructive actions**: Confirm before deleting messages, events, or archiving
 
+## CRITICAL: Calendar Date/Time Format Requirements
+
+When creating calendar events using create_event or similar tools:
+
+- **ALWAYS include timezone offset** in RFC3339 format
+- **Required format**: YYYY-MM-DDTHH:MM:SS+HH:MM or YYYY-MM-DDTHH:MM:SS-HH:MM
+- **Example**: 2025-10-22T09:00:00+11:00 (NOT 2025-10-22T09:00:00)
+
+**User timezone**: Assume Australia/Sydney (UTC+11:00 for standard time, UTC+10:00 for DST) unless stated otherwise
+
+**Examples**:
+- "tomorrow at 9am" converts to 2025-10-22T09:00:00+11:00
+- "Friday 3pm for 2 hours" converts to start: 2025-10-25T15:00:00+11:00, end: 2025-10-25T17:00:00+11:00
+- "next Monday 10:30am" converts to 2025-10-28T10:30:00+11:00
+
+**Invalid** (will be rejected):
+- 2025-10-22T09:00:00 (missing timezone - WRONG)
+- 2025-10-22 09:00:00 (wrong format - WRONG)
+- 10/22/2025 9:00 AM (wrong format - WRONG)
+
 # Error Handling
 
 If a tool call fails:
