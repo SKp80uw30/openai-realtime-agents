@@ -1,13 +1,7 @@
-import { Suspense } from "react";
-import OAuthCallbackClient from "@/app/oauth/callback/client";
+"use client";
 
-export default function OAuthCallbackPage() {
-  return (
-    <Suspense fallback={<div className="min-h-screen bg-gray-100 text-gray-800 flex flex-col items-center justify-center p-6">Processing authorization…</div>}>
-      <OAuthCallbackClient />
-    </Suspense>
-  );
-}
+import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 
 interface StoredAuthSession {
   tokenUrl: string;
@@ -43,7 +37,7 @@ function clearSessionData(state: string) {
   window.sessionStorage.removeItem(`mcp_oauth_state_${state}`);
 }
 
-export default function OAuthCallbackPage() {
+export default function OAuthCallbackClient() {
   const searchParams = useSearchParams();
   const [status, setStatus] = useState<StatusState>({ type: "idle" });
 
@@ -64,7 +58,7 @@ export default function OAuthCallbackPage() {
       if (query.state) {
         clearSessionData(query.state);
       }
-      if (window.opener && !window.opener.closed) {
+      if (typeof window !== "undefined" && window.opener && !window.opener.closed) {
         window.opener.postMessage(
           {
             type: "mcp-oauth-error",
@@ -120,7 +114,7 @@ export default function OAuthCallbackPage() {
 
         clearSessionData(query.state!);
 
-        if (window.opener && !window.opener.closed) {
+        if (typeof window !== "undefined" && window.opener && !window.opener.closed) {
           window.opener.postMessage(
             {
               type: "mcp-oauth-complete",
