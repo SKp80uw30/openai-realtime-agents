@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 
 import { MCP_CONNECTOR_CATALOG } from '@/app/data/mcpCatalog';
@@ -46,6 +46,58 @@ function buildAllowedToolsList(raw: string): string[] | undefined {
   return items.length ? items : undefined;
 }
 
+function generateRandomString(length = 64): string {
+  if (typeof window === 'undefined' || !window.crypto?.getRandomValues) {
+    return Array(length).fill('x').join('');
+  }
+  const charset = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~';
+  const result = [] as string[];
+  const randomValues = new Uint8Array(length);
+  window.crypto.getRandomValues(randomValues);
+  for (let i = 0; i < length; i += 1) {
+    result.push(charset[randomValues[i] % charset.length]);
+  }
+  return result.join('');
+}
+
+function base64UrlEncode(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  bytes.forEach((b) => {
+    binary += String.fromCharCode(b);
+  });
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+async function generateCodeChallenge(verifier: string): Promise<string> {
+  if (typeof window === 'undefined' || !window.crypto?.subtle) {
+    return verifier;
+  }
+  const encoder = new TextEncoder();
+  const data = encoder.encode(verifier);
+  const digest = await window.crypto.subtle.digest('SHA-256', data);
+  return base64UrlEncode(digest);
+}
+
+function generateState() {
+  if (typeof window !== 'undefined' && window.crypto?.randomUUID) {
+    return window.crypto.randomUUID();
+  }
+  return generateRandomString(32);
+}
+
+interface PendingOAuthSession {
+  tokenUrl: string;
+  clientId: string;
+  clientSecret: string;
+  codeVerifier: string;
+  redirectUri: string;
+  serverUrl: string;
+  serverLabel?: string;
+  serviceName?: string;
+  createdAt: number;
+}
+
 export default function McpManager({ servers, onServersChange }: McpManagerProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [draft, setDraft] = useState<DraftServerState>(() => ({ ...DEFAULT_STATE }));
@@ -54,6 +106,7 @@ export default function McpManager({ servers, onServersChange }: McpManagerProps
   const [authInfo, setAuthInfo] = useState<McpAuthInfo | null>(null);
   const [authInfoError, setAuthInfoError] = useState('');
   const [isAuthInfoLoading, setIsAuthInfoLoading] = useState(false);
+  const [isAuthorizing, setIsAuthorizing] = useState(false);
 
   const groupedCatalog = useMemo(() => {
     return MCP_CONNECTOR_CATALOG.reduce<Record<McpConnectorCategory, McpConnectorDefinition[]>>(
@@ -301,15 +354,33 @@ export default function McpManager({ servers, onServersChange }: McpManagerProps
       .map((header) => ({ id: header.id, key: header.key.trim(), value: header.value.trim() }));
 
   const handleAuthorize = async () => {
-    if (!draft.serverUrl) {
+    if (!draft.serverUrl.trim()) {
       setAuthInfoError('Enter the server URL first.');
+      return;
+    }
+    if (typeof window === 'undefined') {
+      setAuthInfoError('OAuth flow is only available in the browser.');
       return;
     }
 
     setAuthInfoError('');
+    setIsAuthorizing(true);
 
     try {
-      const response = await fetch('/api/mcp/start-auth', {
+      const existingInfo = authInfo;
+      let metadata = existingInfo;
+      if (!metadata?.authorize_url || !metadata?.token_url) {
+        const fetched = await fetchAuthInfo(draft.serverUrl, normalizeHeadersForRequest());
+        metadata = fetched || null;
+      }
+
+      if (!metadata?.authorize_url || !metadata?.token_url) {
+        throw new Error('Unable to determine authorization and token endpoints.');
+      }
+
+      const redirectUri = `${window.location.origin}/oauth/callback`;
+
+      const registerResponse = await fetch('/api/mcp/oauth/register', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -317,48 +388,71 @@ export default function McpManager({ servers, onServersChange }: McpManagerProps
         body: JSON.stringify({
           serverUrl: draft.serverUrl,
           headers: normalizeHeadersForRequest(),
-          serviceName: currentDefinition?.name ?? 'Google Workspace',
+          clientName: draft.label || currentDefinition?.name || 'Workspace MCP Client',
+          redirectUri,
         }),
       });
 
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data?.error || 'Failed to start authorization flow.');
+      const registerData = await registerResponse.json();
+      if (!registerResponse.ok) {
+        throw new Error(registerData?.error || 'Failed to register OAuth client.');
       }
 
-      if (typeof data?.message === 'string') {
-        setAuthInfo((prev) => ({
-          ...(prev || {}),
-          raw: data.message,
-        }));
+      const codeVerifier = generateRandomString(96);
+      const codeChallenge = await generateCodeChallenge(codeVerifier);
+      const state = generateState();
+
+      const rawMetadata = (metadata.raw ?? {}) as any;
+      const scopes = Array.isArray(rawMetadata?.scopes_supported) && rawMetadata.scopes_supported.length
+        ? (rawMetadata.scopes_supported as string[])
+        : ['openid', 'https://www.googleapis.com/auth/userinfo.email', 'https://www.googleapis.com/auth/userinfo.profile'];
+
+      const authorizeParams = new URLSearchParams({
+        response_type: 'code',
+        client_id: registerData.client_id,
+        redirect_uri: redirectUri,
+        scope: scopes.join(' '),
+        state,
+        code_challenge: codeChallenge,
+        code_challenge_method: 'S256',
+        access_type: 'offline',
+        prompt: 'consent',
+      });
+
+      const sessionPayload: PendingOAuthSession = {
+        tokenUrl: metadata.token_url,
+        clientId: registerData.client_id,
+        clientSecret: registerData.client_secret,
+        codeVerifier,
+        redirectUri,
+        serverUrl: draft.serverUrl,
+        serverLabel: draft.label,
+        serviceName: currentDefinition?.name,
+        createdAt: Date.now(),
+      };
+
+      try {
+        window.sessionStorage.setItem(
+          `mcp_oauth_state_${state}`,
+          JSON.stringify(sessionPayload),
+        );
+      } catch {
+        // Ignore storage failures; callback will fail gracefully if data missing
       }
 
-      const urlFromTool: string | undefined = data?.authUrl;
+      setAuthInfo((prev) => ({
+        ...(prev || {}),
+        authorize_url: metadata?.authorize_url,
+        token_url: metadata?.token_url,
+        raw: metadata?.raw,
+        source: metadata?.source,
+      }));
 
-      if (urlFromTool) {
-        window.open(urlFromTool, '_blank', 'noopener,noreferrer');
-        setAuthInfo((prev) => ({
-          ...(prev || {}),
-          authorize_url: urlFromTool,
-        }));
-        return;
-      }
-
-      // Fallback to metadata-derived URLs
-      let authorizeUrl = authInfo?.authorize_url;
-      if (!authorizeUrl) {
-        const result = await fetchAuthInfo(draft.serverUrl);
-        authorizeUrl = result?.authorize_url;
-      }
-      if (!authorizeUrl) {
-        authorizeUrl = currentDefinition?.authUrl;
-      }
-      if (!authorizeUrl) {
-        throw new Error('Unable to determine authorization URL.');
-      }
+      const authorizeUrl = `${metadata.authorize_url}?${authorizeParams.toString()}`;
       window.open(authorizeUrl, '_blank', 'noopener,noreferrer');
     } catch (err: any) {
       setAuthInfoError(err?.message || 'Failed to launch authorization.');
+      setIsAuthorizing(false);
     }
   };
 
@@ -369,6 +463,57 @@ export default function McpManager({ servers, onServersChange }: McpManagerProps
     }
     void fetchAuthInfo(draft.serverUrl);
   };
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const handler = (event: MessageEvent) => {
+      if (event.origin !== window.location.origin) return;
+      if (!event.data || typeof event.data !== 'object') return;
+
+      if (event.data.type === 'mcp-oauth-complete') {
+        const token = typeof event.data.token === 'string' ? event.data.token : undefined;
+        if (token) {
+          setDraft((prev) => {
+            const filtered = prev.headers.filter(
+              (header) => header.key.toLowerCase() !== 'authorization',
+            );
+            return {
+              ...prev,
+              headers: [
+                ...filtered,
+                {
+                  id: uuidv4(),
+                  key: 'Authorization',
+                  value: `Bearer ${token}`,
+                },
+              ],
+            };
+          });
+          setAuthInfo((prev) => ({
+            ...(prev || {}),
+            authorize_url: prev?.authorize_url,
+            token_url: prev?.token_url,
+            mode: prev?.mode ?? 'oauth2.1',
+          }));
+          setAuthInfoError('');
+        }
+        setIsAuthorizing(false);
+      }
+
+      if (event.data.type === 'mcp-oauth-error') {
+        const message =
+          typeof event.data.error === 'string'
+            ? event.data.error
+            : 'Authorization flow was cancelled or failed.';
+        setAuthInfoError(message);
+        setIsAuthorizing(false);
+      }
+    };
+
+    window.addEventListener('message', handler);
+    return () => window.removeEventListener('message', handler);
+  }, []);
 
   return (
     <div className="flex items-center gap-2">
@@ -641,6 +786,11 @@ export default function McpManager({ servers, onServersChange }: McpManagerProps
                           token_url: <span className="font-mono text-[11px]">{authInfo.token_url}</span>
                         </p>
                       )}
+                      {authInfo.token_url && (
+                        <p className="break-all">
+                          token_url: <span className="font-mono text-[11px]">{authInfo.token_url}</span>
+                        </p>
+                      )}
                     </div>
                   )}
                   {authInfoError && (
@@ -680,9 +830,12 @@ export default function McpManager({ servers, onServersChange }: McpManagerProps
                     <button
                       type="button"
                       onClick={handleAuthorize}
-                      className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-100"
+                      className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-100 disabled:opacity-60 disabled:cursor-not-allowed"
+                      disabled={isAuthorizing}
                     >
-                      {currentDefinition?.authButtonLabel ?? 'Authorize connector'}
+                      {isAuthorizing
+                        ? 'Waiting for authorization…'
+                        : currentDefinition?.authButtonLabel ?? 'Authorize connector'}
                     </button>
                     {(currentDefinition?.authHelpText || authInfo?.mode) && (
                       <p className="text-xs text-gray-500 text-right max-w-sm">
