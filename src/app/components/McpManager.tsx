@@ -462,7 +462,17 @@ export default function McpManager({ servers, onServersChange }: McpManagerProps
       }));
 
       const authorizeUrl = `${metadata.authorize_url}?${authorizeParams.toString()}`;
-      window.open(authorizeUrl, '_blank', 'noopener,noreferrer');
+      const popup = window.open(
+        authorizeUrl,
+        'workspace-mcp-oauth',
+        'width=600,height=750,resizable=yes,scrollbars=yes',
+      );
+      if (!popup) {
+        setAuthInfoError('Browser blocked the authorization popup. Please allow popups and try again.');
+        setIsAuthorizing(false);
+        return;
+      }
+      popup.focus();
     } catch (err: any) {
       setAuthInfoError(err?.message || 'Failed to launch authorization.');
       setIsAuthorizing(false);
