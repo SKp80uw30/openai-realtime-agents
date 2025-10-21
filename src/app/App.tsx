@@ -229,7 +229,18 @@ function App() {
   ): Promise<string | null> => {
     logClientEvent({ url: "/session" }, "fetch_session_token_request");
 
+    console.log('[fetchEphemeralKey] Total MCP servers:', mcpServers.length);
+    console.log('[fetchEphemeralKey] MCP servers:', mcpServers.map(s => ({
+      label: s.label,
+      status: s.status,
+      serverUrl: s.serverUrl,
+      hasHeaders: s.headers.length > 0,
+      headerKeys: s.headers.map(h => h.key),
+    })));
+
     const eligibleServers = mcpServers.filter((server) => server.status !== 'error');
+
+    console.log('[fetchEphemeralKey] Eligible servers after filter:', eligibleServers.length);
 
     const payload = {
       mcpServers: eligibleServers.map<McpServerRequestPayload>((server) => ({
@@ -249,6 +260,16 @@ function App() {
             : undefined,
       })),
     };
+
+    console.log('[fetchEphemeralKey] Payload to /api/session:', JSON.stringify({
+      mcpServers: payload.mcpServers.map(s => ({
+        label: s.label,
+        server_url: s.server_url,
+        has_headers: !!s.headers,
+        header_keys: s.headers ? Object.keys(s.headers) : [],
+        allowed_tools_count: Array.isArray(s.allowed_tools) ? s.allowed_tools.length : 0,
+      }))
+    }, null, 2));
 
     try {
       const tokenResponse = await fetch("/api/session", {
