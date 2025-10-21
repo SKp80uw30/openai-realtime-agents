@@ -26,7 +26,7 @@ The test script needs your OAuth token to authenticate with the Google Workspace
 Once you have the token, run:
 
 ```bash
-MCP_OAUTH_TOKEN="your_token_here" npx tsx test-mcp-direct.ts
+MCP_OAUTH_TOKEN="your_token_here" npx tsx scripts/test-mcp-direct.ts
 ```
 
 ## What This Test Will Do
