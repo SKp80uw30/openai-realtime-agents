@@ -80,7 +80,7 @@ The approval request has `approval_request_id: null`, which means OpenAI isn't c
 # Get your token first (see GET_OAUTH_TOKEN.md)
 
 # Run the test
-MCP_OAUTH_TOKEN="your_token_here" npx tsx test-mcp-direct.ts
+MCP_OAUTH_TOKEN="your_token_here" npx tsx scripts/test-mcp-direct.ts
 
 # Watch Railway logs while testing
 # Visit: https://railway.app/project/2daab0e5-db69-4152-a595-23af33325731
