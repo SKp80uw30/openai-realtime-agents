@@ -84,6 +84,9 @@ export function useRealtimeSession(callbacks: RealtimeSessionCallbacks = {}) {
             outputIndex: typeof event.output_index === 'number' ? event.output_index : undefined,
             logged: false,
           });
+
+          // Track that this response contains MCP calls (do this when added, not when completed)
+          responsesWithMcpCallsRef.current.add(responseId);
         }
         logServerEvent(event);
         break;
@@ -183,11 +186,6 @@ export function useRealtimeSession(callbacks: RealtimeSessionCallbacks = {}) {
           };
           logServerEvent(mcpResultDetails);
           historyHandlersRef.current.handleMcpCallCompleted(mcpResultDetails);
-
-          // Track that this response contained MCP calls
-          if (event.response_id) {
-            responsesWithMcpCallsRef.current.add(event.response_id);
-          }
 
           // Clean up pending call
           if (event.item?.id) {
