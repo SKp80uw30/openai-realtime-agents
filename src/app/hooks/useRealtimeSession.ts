@@ -46,6 +46,7 @@ export function useRealtimeSession(callbacks: RealtimeSessionCallbacks = {}) {
   const latestResponseIdRef = useRef<string | null>(null);
   const pendingMcpApprovalRef = useRef<Map<string, { responseId: string; outputIndex?: number }>>(new Map());
   const pendingMcpCallsRef = useRef<Map<string, { callId: string; toolName: string; serverLabel: string; outputIndex?: number; logged: boolean }>>(new Map());
+  const responsesWithMcpCallsRef = useRef<Set<string>>(new Set());
 
   const handleTransportEvent = useCallback((event: any) => {
     // Handle additional server events that aren't managed by the session
@@ -143,6 +144,24 @@ export function useRealtimeSession(callbacks: RealtimeSessionCallbacks = {}) {
               pendingMcpCallsRef.current.delete(callId);
             }
           });
+
+          // If this response contained MCP calls, trigger a new response so the agent can report back
+          // This is needed when require_approval is 'never' (auto-execution mode)
+          if (responsesWithMcpCallsRef.current.has(responseId)) {
+            responsesWithMcpCallsRef.current.delete(responseId);
+
+            if (sessionRef.current) {
+              sessionRef.current.transport.sendEvent({
+                type: 'response.create',
+              } as any);
+
+              logServerEvent({
+                type: 'agent.mcp_response.followup_triggered',
+                response_id: responseId,
+                note: 'Triggering new response after MCP calls completed',
+              });
+            }
+          }
         }
         logServerEvent(event);
         break;
@@ -164,6 +183,11 @@ export function useRealtimeSession(callbacks: RealtimeSessionCallbacks = {}) {
           };
           logServerEvent(mcpResultDetails);
           historyHandlersRef.current.handleMcpCallCompleted(mcpResultDetails);
+
+          // Track that this response contained MCP calls
+          if (event.response_id) {
+            responsesWithMcpCallsRef.current.add(event.response_id);
+          }
 
           // Clean up pending call
           if (event.item?.id) {
