@@ -48,11 +48,6 @@ export function useRealtimeSession(callbacks: RealtimeSessionCallbacks = {}) {
   const pendingMcpCallsRef = useRef<Map<string, { callId: string; toolName: string; serverLabel: string; outputIndex?: number; logged: boolean }>>(new Map());
 
   const handleTransportEvent = useCallback((event: any) => {
-    // Log MCP-related events to console for debugging
-    if (event.type?.includes('mcp')) {
-      console.log(`[Transport Event] ${event.type}:`, event);
-    }
-
     // Handle additional server events that aren't managed by the session
     switch (event.type) {
       case 'response.created': {
@@ -335,27 +330,13 @@ export function useRealtimeSession(callbacks: RealtimeSessionCallbacks = {}) {
       _agent: any,
       approval: any,
     ) => {
-      console.log('[toolApprovalListener] MCP tool approval requested:', {
-        tool_name: approval?.tool?.name,
-        approvalItem: approval?.approvalItem,
-        full_approval: approval,
-      });
-
-      logServerEvent({
-        type: 'agent.tool_approval.requested',
-        tool_name: approval?.tool?.name,
-        approval_item_id: approval?.approvalItem?.id,
-      });
-
       try {
         await session.approve(approval.approvalItem, { alwaysApprove: true });
         logServerEvent({
           type: 'agent.tool_approval.auto_approved',
           tool_name: approval?.tool?.name,
         });
-        console.log('[toolApprovalListener] Approval sent successfully');
       } catch (error: any) {
-        console.error('[toolApprovalListener] Approval failed:', error);
         logServerEvent({
           type: 'agent.tool_approval.error',
           tool_name: approval?.tool?.name,
