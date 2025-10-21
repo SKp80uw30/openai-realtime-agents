@@ -16,6 +16,7 @@ async function createRealtimeSession(body: SessionRequestBody = {}) {
           server_url: server.server_url,
           headers: server.headers,
           allowed_tools: server.allowed_tools,
+          require_approval: 'always',  // Enable approval flow for MCP tool calls
         }))
       : undefined;
 

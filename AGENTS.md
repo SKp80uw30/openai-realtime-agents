@@ -25,6 +25,26 @@ When adding an agent, export it from `src/app/agentConfigs/index.ts`, provide cl
 
 The project uses the Workspace MCP server (https://workspacemcp.com/) for Google Calendar, Gmail, and Slack integration.
 
+### CRITICAL: MCP Approval Configuration
+
+**Required for MCP tools to work:** The session configuration MUST include `require_approval: 'always'` or `'never'` in the MCP tool configuration. Without this parameter, OpenAI will NOT create approval requests and MCP calls will be abandoned with `approval_request_id: null`.
+
+In `src/app/api/session/route.ts`:
+```typescript
+{
+  type: 'mcp',
+  server_label: server.label,
+  server_url: server.server_url,
+  headers: server.headers,
+  allowed_tools: server.allowed_tools,
+  require_approval: 'always',  // CRITICAL: Enables approval flow
+}
+```
+
+Options:
+- `'always'` - Requires approval for every MCP tool call (recommended for security)
+- `'never'` - Automatic execution without approval (use only for trusted servers)
+
 ### Key Requirements from Workspace MCP
 
 **Create Event Tool (`create_event`):**
