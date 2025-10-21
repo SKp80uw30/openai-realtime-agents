@@ -20,6 +20,20 @@ async function createRealtimeSession(body: SessionRequestBody = {}) {
         }))
       : undefined;
 
+    const sessionPayload = {
+      model: "gpt-4o-realtime-preview-2025-06-03",
+      ...(tools ? { tools } : {}),
+    };
+
+    // Log what we're sending to OpenAI (redact auth tokens for security)
+    console.log('[Session Create] Sending to OpenAI:', JSON.stringify({
+      ...sessionPayload,
+      tools: sessionPayload.tools?.map((t: any) => ({
+        ...t,
+        headers: t.headers ? Object.keys(t.headers) : undefined, // Only show header keys, not values
+      })),
+    }, null, 2));
+
     const response = await fetch(
       "https://api.openai.com/v1/realtime/sessions",
       {
@@ -28,13 +42,16 @@ async function createRealtimeSession(body: SessionRequestBody = {}) {
           Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          model: "gpt-4o-realtime-preview-2025-06-03",
-          ...(tools ? { tools } : {}),
-        }),
+        body: JSON.stringify(sessionPayload),
       }
     );
     const data = await response.json();
+
+    console.log('[Session Create] OpenAI response status:', response.status);
+    if (!response.ok) {
+      console.error('[Session Create] OpenAI error:', JSON.stringify(data, null, 2));
+    }
+
     return NextResponse.json(data, { status: response.status });
   } catch (error) {
     console.error("Error in /session:", error);
