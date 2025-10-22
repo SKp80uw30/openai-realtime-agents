@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useState, FC, PropsWithChildren } from "react";
+import React, { createContext, useContext, useState, useCallback, FC, PropsWithChildren } from "react";
 import { v4 as uuidv4 } from "uuid";
 import { LoggedEvent } from "@/app/types";
 
@@ -50,12 +50,12 @@ export const EventProvider: FC<PropsWithChildren> = ({ children }) => {
     });
   }
 
-  const logClientEvent: EventContextValue["logClientEvent"] = (eventObj, eventNameSuffix = "") => {
+  const logClientEvent: EventContextValue["logClientEvent"] = useCallback((eventObj, eventNameSuffix = "") => {
     const name = `${eventObj.type || ""} ${eventNameSuffix || ""}`.trim();
     addLoggedEvent("client", name, eventObj);
-  };
+  }, []);
 
-  const logServerEvent: EventContextValue["logServerEvent"] = (eventObj, eventNameSuffix = "") => {
+  const logServerEvent: EventContextValue["logServerEvent"] = useCallback((eventObj, eventNameSuffix = "") => {
     const noisyDeltaTypes = new Set([
       'conversation.item.input_audio_transcription.delta',
       'response.text.delta',
@@ -67,9 +67,9 @@ export const EventProvider: FC<PropsWithChildren> = ({ children }) => {
 
     const name = `${eventObj.type || ""} ${eventNameSuffix || ""}`.trim();
     addLoggedEvent("server", name, eventObj);
-  };
+  }, []);
 
-  const logHistoryItem: EventContextValue['logHistoryItem'] = (item) => {
+  const logHistoryItem: EventContextValue['logHistoryItem'] = useCallback((item) => {
     let eventName = item.type;
     if (item.type === 'message') {
       eventName = `${item.role}.${item.status}`;
@@ -78,9 +78,9 @@ export const EventProvider: FC<PropsWithChildren> = ({ children }) => {
       eventName = `function.${item.name}.${item.status}`;
     }
     addLoggedEvent('server', eventName, item);
-  };
+  }, []);
 
-  const toggleExpand: EventContextValue['toggleExpand'] = (id) => {
+  const toggleExpand: EventContextValue['toggleExpand'] = useCallback((id) => {
     setLoggedEvents((prev) =>
       prev.map((log) => {
         if (log.id === id) {
@@ -89,7 +89,7 @@ export const EventProvider: FC<PropsWithChildren> = ({ children }) => {
         return log;
       })
     );
-  };
+  }, []);
 
 
   return (

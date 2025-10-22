@@ -88,6 +88,14 @@ export function useRealtimeSession(callbacks: RealtimeSessionCallbacks = {}) {
 
           // Track that this response contains MCP calls (do this when added, not when completed)
           responsesWithMcpCallsRef.current.add(responseId);
+
+          logServerEvent({
+            type: 'agent.mcp_response.tracked',
+            response_id: responseId,
+            mcp_call_id: event.item.id,
+            tool_name: event.item?.name,
+            note: 'Response marked as containing MCP calls',
+          });
         }
         logServerEvent(event);
         break;
@@ -182,6 +190,18 @@ export function useRealtimeSession(callbacks: RealtimeSessionCallbacks = {}) {
           // Trigger a new response after MCP call completes (only once per response)
           // This is needed when require_approval is 'never' (auto-execution mode)
           const responseId = event.response_id;
+
+          logServerEvent({
+            type: 'agent.mcp_response.trigger_check',
+            response_id: responseId,
+            mcp_call_id: event.item?.id,
+            tool_name: event.item?.name,
+            has_response_id: !!responseId,
+            is_tracked: responseId ? responsesWithMcpCallsRef.current.has(responseId) : false,
+            already_triggered: responseId ? mcpResponseTriggeredRef.current.has(responseId) : false,
+            has_session: !!sessionRef.current,
+          });
+
           if (responseId &&
               responsesWithMcpCallsRef.current.has(responseId) &&
               !mcpResponseTriggeredRef.current.has(responseId)) {
