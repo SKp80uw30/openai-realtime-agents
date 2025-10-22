@@ -45,9 +45,8 @@ export function useRealtimeSession(callbacks: RealtimeSessionCallbacks = {}) {
 
   const latestResponseIdRef = useRef<string | null>(null);
   const pendingMcpApprovalRef = useRef<Map<string, { responseId: string; outputIndex?: number }>>(new Map());
-  const pendingMcpCallsRef = useRef<Map<string, { callId: string; toolName: string; serverLabel: string; outputIndex?: number; logged: boolean }>>(new Map());
-  const responsesWithMcpCallsRef = useRef<Set<string>>(new Set());
-  const mcpResponseTriggeredRef = useRef<Set<string>>(new Set()); // Track which responses have already triggered a followup
+  const pendingMcpCallsRef = useRef<Map<string, { callId: string; responseId?: string; toolName: string; serverLabel: string; outputIndex?: number; logged: boolean }>>(new Map());
+  const mcpCallFollowupTriggeredRef = useRef<Set<string>>(new Set());
 
   const handleTransportEvent = useCallback((event: any) => {
     // Handle additional server events that aren't managed by the session
@@ -80,14 +79,12 @@ export function useRealtimeSession(callbacks: RealtimeSessionCallbacks = {}) {
           // Store pending MCP call - arguments will arrive in response.mcp_call_arguments.done
           pendingMcpCallsRef.current.set(event.item.id, {
             callId: event.item.id,
+            responseId,
             toolName: event.item?.name,
             serverLabel: event.item?.server_label,
             outputIndex: typeof event.output_index === 'number' ? event.output_index : undefined,
             logged: false,
           });
-
-          // Track that this response contains MCP calls (do this when added, not when completed)
-          responsesWithMcpCallsRef.current.add(responseId);
 
           logServerEvent({
             type: 'agent.mcp_response.tracked',
@@ -125,41 +122,20 @@ export function useRealtimeSession(callbacks: RealtimeSessionCallbacks = {}) {
         break;
       }
       case 'response.done': {
-        // Check if there are any MCP calls that never completed
         const responseId = event.response?.id;
         if (responseId) {
-          pendingMcpCallsRef.current.forEach((call, callId) => {
-            if (call.logged) {
-              // This MCP call was initiated but never completed
-              logServerEvent({
-                type: 'agent.mcp_call.abandoned',
-                mcp_call_id: callId,
-                response_id: responseId,
-                tool_name: call.toolName,
-                server_label: call.serverLabel,
-                warning: 'response.done fired but no response.output_item.done received for this MCP call',
-              });
+          const pendingCalls = Array.from(pendingMcpCallsRef.current.values()).filter(
+            (call) => call.responseId === responseId,
+          );
 
-              // Log as completed with null to trigger warning in UI
-              historyHandlersRef.current.handleMcpCallCompleted({
-                type: 'agent.mcp_call.completed',
-                mcp_call_id: callId,
-                response_id: responseId,
-                output_index: call.outputIndex,
-                tool_name: call.toolName,
-                server_label: call.serverLabel,
-                output: null,
-                error: null,
-                status: 'abandoned',
-              });
-
-              pendingMcpCallsRef.current.delete(callId);
-            }
-          });
-
-          // Clean up tracking for this response
-          responsesWithMcpCallsRef.current.delete(responseId);
-          mcpResponseTriggeredRef.current.delete(responseId);
+          if (pendingCalls.length > 0) {
+            logServerEvent({
+              type: 'agent.mcp_call.waiting_for_completion',
+              response_id: responseId,
+              pending_call_ids: pendingCalls.map((call) => call.callId),
+              note: 'response.done received while MCP calls still pending; waiting for response.output_item.done events',
+            });
+          }
         }
         logServerEvent(event);
         break;
@@ -182,45 +158,54 @@ export function useRealtimeSession(callbacks: RealtimeSessionCallbacks = {}) {
           logServerEvent(mcpResultDetails);
           historyHandlersRef.current.handleMcpCallCompleted(mcpResultDetails);
 
-          // Clean up pending call
-          if (event.item?.id) {
-            pendingMcpCallsRef.current.delete(event.item.id);
-          }
-
-          // Trigger a new response after MCP call completes (only once per response)
-          // This is needed when require_approval is 'never' (auto-execution mode)
-          const responseId = event.response_id;
+          const callId = event.item?.id;
+          const pendingCall = callId ? pendingMcpCallsRef.current.get(callId) : undefined;
+          const responseId = pendingCall?.responseId ?? event.response_id;
+          const alreadyTriggered = callId ? mcpCallFollowupTriggeredRef.current.has(callId) : false;
 
           logServerEvent({
             type: 'agent.mcp_response.trigger_check',
             response_id: responseId,
-            mcp_call_id: event.item?.id,
+            mcp_call_id: callId,
             tool_name: event.item?.name,
             has_response_id: !!responseId,
-            is_tracked: responseId ? responsesWithMcpCallsRef.current.has(responseId) : false,
-            already_triggered: responseId ? mcpResponseTriggeredRef.current.has(responseId) : false,
             has_session: !!sessionRef.current,
+            pending_call_known: !!pendingCall,
+            already_triggered: alreadyTriggered,
           });
 
-          if (responseId &&
-              responsesWithMcpCallsRef.current.has(responseId) &&
-              !mcpResponseTriggeredRef.current.has(responseId)) {
-
-            mcpResponseTriggeredRef.current.add(responseId);
-
-            if (sessionRef.current) {
+          if (callId && !alreadyTriggered && sessionRef.current) {
+            try {
               sessionRef.current.transport.sendEvent({
                 type: 'response.create',
               } as any);
 
+              mcpCallFollowupTriggeredRef.current.add(callId);
+
               logServerEvent({
                 type: 'agent.mcp_response.followup_triggered',
                 response_id: responseId,
-                mcp_call_id: event.item?.id,
+                mcp_call_id: callId,
                 tool_name: event.item?.name,
                 note: 'Triggering new response after MCP call completed',
               });
+            } catch (error: any) {
+              logServerEvent({
+                type: 'agent.mcp_response.followup_error',
+                response_id: responseId,
+                mcp_call_id: callId,
+                tool_name: event.item?.name,
+                error: error?.message ?? error,
+              });
             }
+          }
+
+          if (callId) {
+            pendingMcpCallsRef.current.delete(callId);
+            // Allow reuse after a short delay to avoid leaks while guarding against duplicate events
+            setTimeout(() => {
+              mcpCallFollowupTriggeredRef.current.delete(callId);
+            }, 60_000);
           }
         }
         logServerEvent(event);
