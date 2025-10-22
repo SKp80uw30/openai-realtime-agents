@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Voice Agent Capabilities</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 40px 20px;
+            color: #202124;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: #f8f9fa;
+            border-radius: 30px;
+            padding: 60px 40px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 60px;
+        }
+        
+        .header h1 {
+            font-size: 4em;
+            color: #202124;
+            margin-bottom: 10px;
+            font-weight: 800;
+        }
+        
+        .header p {
+            font-size: 1.8em;
+            color: #5f6368;
+            font-weight: 400;
+        }
+        
+        .cards-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 30px;
+            margin-bottom: 60px;
+        }
+        
+        .card {
+            background: white;
+            border-radius: 20px;
+            overflow: hidden;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        
+        .card:hover {
+            transform: translateY(-10px);
+            box-shadow: 0 12px 40px rgba(0,0,0,0.15);
+        }
+        
+        .card-header {
+            padding: 30px 25px;
+            color: white;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        
+        .card-icon {
+            font-size: 2.5em;
+            background: rgba(255,255,255,0.2);
+            width: 60px;
+            height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            backdrop-filter: blur(10px);
+        }
+        
+        .card-title {
+            font-size: 1.5em;
+            font-weight: 700;
+        }
+        
+        .card-body {
+            padding: 25px;
+        }
+        
+        .card-body ul {
+            list-style: none;
+        }
+        
+        .card-body li {
+            padding: 10px 0;
+            padding-left: 30px;
+            position: relative;
+            color: #5f6368;
+            font-size: 1.05em;
+        }
+        
+        .card-body li:before {
+            content: "•";
+            position: absolute;
+            left: 10px;
+            color: inherit;
+            font-weight: bold;
+            font-size: 1.5em;
+        }
+        
+        .gmail { background: linear-gradient(135deg, #ea4335 0%, #c5221f 100%); }
+        .drive { background: linear-gradient(135deg, #0f9d58 0%, #0b8043 100%); }
+        .calendar { background: linear-gradient(135deg, #4285f4 0%, #1967d2 100%); }
+        .tasks { background: linear-gradient(135deg, #1967d2 0%, #174ea6 100%); }
+        .search { background: linear-gradient(135deg, #5f6368 0%, #3c4043 100%); }
+        
+        .features-banner {
+            background: linear-gradient(135deg, #4285f4 0%, #1967d2 100%);
+            border-radius: 20px;
+            padding: 50px;
+            margin-bottom: 60px;
+            color: white;
+        }
+        
+        .features-banner h2 {
+            text-align: center;
+            font-size: 2.5em;
+            margin-bottom: 40px;
+            font-weight: 700;
+        }
+        
+        .features-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 25px;
+        }
+        
+        .feature-item {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            font-size: 1.2em;
+            padding: 15px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 12px;
+            backdrop-filter: blur(10px);
+        }
+        
+        .feature-icon {
+            font-size: 1.8em;
+        }
+        
+        .footer {
+            text-align: center;
+            margin-top: 60px;
+        }
+        
+        .footer h3 {
+            font-size: 2em;
+            color: #202124;
+            margin-bottom: 40px;
+            font-weight: 600;
+        }
+        
+        .stats {
+            display: flex;
+            justify-content: space-around;
+            flex-wrap: wrap;
+            gap: 40px;
+        }
+        
+        .stat {
+            text-align: center;
+        }
+        
+        .stat-number {
+            font-size: 4em;
+            font-weight: 800;
+            color: #4285f4;
+            display: block;
+            margin-bottom: 10px;
+        }
+        
+        .stat-label {
+            font-size: 1.2em;
+            color: #5f6368;
+            font-weight: 500;
+        }
+        
+        @media (max-width: 768px) {
+            .header h1 {
+                font-size: 2.5em;
+            }
+            
+            .header p {
+                font-size: 1.3em;
+            }
+            
+            .cards-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .features-list {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Voice Agent</h1>
+            <p>Powered by Google Workspace</p>
+        </div>
+        
+        <div class="cards-grid">
+            <div class="card">
+                <div class="card-header gmail">
+                    <div class="card-icon">📧</div>
+                    <div class="card-title">Gmail</div>
+                </div>
+                <div class="card-body">
+                    <ul>
+                        <li>Search & read emails</li>
+                        <li>Send & reply with threading</li>
+                        <li>Manage labels & organize</li>
+                        <li>Batch operations</li>
+                    </ul>
+                </div>
+            </div>
+            
+            <div class="card">
+                <div class="card-header drive">
+                    <div class="card-icon">📁</div>
+                    <div class="card-title">Google Drive</div>
+                </div>
+                <div class="card-body">
+                    <ul>
+                        <li>Search all drives</li>
+                        <li>Read document contents</li>
+                        <li>Upload & manage files</li>
+                        <li>Share & set permissions</li>
+                    </ul>
+                </div>
+            </div>
+            
+            <div class="card">
+                <div class="card-header calendar">
+                    <div class="card-icon">📅</div>
+                    <div class="card-title">Calendar</div>
+                </div>
+                <div class="card-body">
+                    <ul>
+                        <li>View & search events</li>
+                        <li>Create & update meetings</li>
+                        <li>Manage attendees</li>
+                        <li>Quick add scheduling</li>
+                    </ul>
+                </div>
+            </div>
+            
+            <div class="card">
+                <div class="card-header tasks">
+                    <div class="card-icon">✅</div>
+                    <div class="card-title">Tasks</div>
+                </div>
+                <div class="card-body">
+                    <ul>
+                        <li>List & search tasks</li>
+                        <li>Create & complete tasks</li>
+                        <li>Organize with lists</li>
+                        <li>Set due dates & subtasks</li>
+                    </ul>
+                </div>
+            </div>
+            
+            <div class="card">
+                <div class="card-header search">
+                    <div class="card-icon">🔍</div>
+                    <div class="card-title">Custom Search</div>
+                </div>
+                <div class="card-body">
+                    <ul>
+                        <li>Web searches</li>
+                        <li>Advanced filters</li>
+                        <li>Site restrictions</li>
+                        <li>File type filters</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        
+        <div class="features-banner">
+            <h2>Key Features</h2>
+            <div class="features-list">
+                <div class="feature-item">
+                    <span class="feature-icon">🔐</span>
+                    <span>Secure OAuth Authentication</span>
+                </div>
+                <div class="feature-item">
+                    <span class="feature-icon">🤖</span>
+                    <span>Natural Language Commands</span>
+                </div>
+                <div class="feature-item">
+                    <span class="feature-icon">⚡</span>
+                    <span>Batch Operations</span>
+                </div>
+                <div class="feature-item">
+                    <span class="feature-icon">🔗</span>
+                    <span>Unified Integration</span>
+                </div>
+                <div class="feature-item">
+                    <span class="feature-icon">🎯</span>
+                    <span>Context-Aware Automation</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="footer">
+            <h3>One authentication • Infinite possibilities</h3>
+            <div class="stats">
+                <div class="stat">
+                    <span class="stat-number">85+</span>
+                    <span class="stat-label">Tools Available</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-number">5</span>
+                    <span class="stat-label">Google Services</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-number">1</span>
+                    <span class="stat-label">Authentication</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

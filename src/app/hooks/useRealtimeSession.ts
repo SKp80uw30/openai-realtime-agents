@@ -47,6 +47,7 @@ export function useRealtimeSession(callbacks: RealtimeSessionCallbacks = {}) {
   const pendingMcpApprovalRef = useRef<Map<string, { responseId: string; outputIndex?: number }>>(new Map());
   const pendingMcpCallsRef = useRef<Map<string, { callId: string; toolName: string; serverLabel: string; outputIndex?: number; logged: boolean }>>(new Map());
   const responsesWithMcpCallsRef = useRef<Set<string>>(new Set());
+  const mcpResponseTriggeredRef = useRef<Set<string>>(new Set()); // Track which responses have already triggered a followup
 
   const handleTransportEvent = useCallback((event: any) => {
     // Handle additional server events that aren't managed by the session
@@ -148,23 +149,9 @@ export function useRealtimeSession(callbacks: RealtimeSessionCallbacks = {}) {
             }
           });
 
-          // If this response contained MCP calls, trigger a new response so the agent can report back
-          // This is needed when require_approval is 'never' (auto-execution mode)
-          if (responsesWithMcpCallsRef.current.has(responseId)) {
-            responsesWithMcpCallsRef.current.delete(responseId);
-
-            if (sessionRef.current) {
-              sessionRef.current.transport.sendEvent({
-                type: 'response.create',
-              } as any);
-
-              logServerEvent({
-                type: 'agent.mcp_response.followup_triggered',
-                response_id: responseId,
-                note: 'Triggering new response after MCP calls completed',
-              });
-            }
-          }
+          // Clean up tracking for this response
+          responsesWithMcpCallsRef.current.delete(responseId);
+          mcpResponseTriggeredRef.current.delete(responseId);
         }
         logServerEvent(event);
         break;
@@ -190,6 +177,30 @@ export function useRealtimeSession(callbacks: RealtimeSessionCallbacks = {}) {
           // Clean up pending call
           if (event.item?.id) {
             pendingMcpCallsRef.current.delete(event.item.id);
+          }
+
+          // Trigger a new response after MCP call completes (only once per response)
+          // This is needed when require_approval is 'never' (auto-execution mode)
+          const responseId = event.response_id;
+          if (responseId &&
+              responsesWithMcpCallsRef.current.has(responseId) &&
+              !mcpResponseTriggeredRef.current.has(responseId)) {
+
+            mcpResponseTriggeredRef.current.add(responseId);
+
+            if (sessionRef.current) {
+              sessionRef.current.transport.sendEvent({
+                type: 'response.create',
+              } as any);
+
+              logServerEvent({
+                type: 'agent.mcp_response.followup_triggered',
+                response_id: responseId,
+                mcp_call_id: event.item?.id,
+                tool_name: event.item?.name,
+                note: 'Triggering new response after MCP call completed',
+              });
+            }
           }
         }
         logServerEvent(event);
