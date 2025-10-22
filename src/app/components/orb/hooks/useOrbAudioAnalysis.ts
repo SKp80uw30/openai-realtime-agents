@@ -25,7 +25,7 @@ function normalise(value: number, max = 1): number {
 
 export function useOrbAudioAnalysis({ audioElement, enabled }: UseOrbAudioAnalysisOptions): OrbAudioAnalysis {
   const [analysis, setAnalysis] = useState<OrbAudioAnalysis>(DEFAULT_ANALYSIS);
-  const rafRef = useRef<number>();
+  const rafRef = useRef<number | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
@@ -143,9 +143,9 @@ export function useOrbAudioAnalysis({ audioElement, enabled }: UseOrbAudioAnalys
 
     return () => {
       if (detach) detach();
-      if (rafRef.current) {
+      if (rafRef.current !== null) {
         cancelAnimationFrame(rafRef.current);
-        rafRef.current = undefined;
+        rafRef.current = null;
       }
       if (analyserRef.current) {
         analyserRef.current.disconnect();
