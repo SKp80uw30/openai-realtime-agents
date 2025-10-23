@@ -15,7 +15,7 @@ export default function manifest(): MetadataRoute.Manifest {
         src: '/openai-logomark.svg',
         sizes: 'any',
         type: 'image/svg+xml',
-        purpose: 'any maskable',
+        purpose: 'maskable',
       },
       {
         src: '/favicon.ico',
