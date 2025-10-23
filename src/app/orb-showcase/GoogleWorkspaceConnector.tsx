@@ -128,7 +128,7 @@ export function GoogleWorkspaceConnector({ servers, onClose, onConnected }: Prop
         value: header.value.trim(),
       }));
 
-  const handleAuthorize = useCallback(async () => {
+  const handleAuthorize = useCallback(() => {
     if (!SERVER_URL) {
       setAuthInfoError('Server URL is not configured.');
       return;
@@ -137,109 +137,120 @@ export function GoogleWorkspaceConnector({ servers, onClose, onConnected }: Prop
       setAuthInfoError('OAuth flow is only available in the browser.');
       return;
     }
+
     setGeneralError('');
     setAuthInfoError('');
     setIsAuthorizing(true);
 
-    try {
-      const existingInfo = authInfo;
-      const metadata = existingInfo?.authorize_url ? existingInfo : await fetchAuthInfo();
-      if (!metadata?.authorize_url || !metadata?.token_url) {
-        throw new Error('Missing authorization endpoints for the Google Workspace MCP server.');
-      }
+    const popup = window.open(
+      '',
+      'workspace-mcp-oauth',
+      'width=600,height=750,resizable=yes,scrollbars=yes',
+    );
 
-      const redirectUri = `${window.location.origin}/oauth/callback`;
+    if (!popup) {
+      setAuthInfoError('Popup blocked. Allow popups and try again.');
+      setIsAuthorizing(false);
+      return;
+    }
 
-      const registerResponse = await fetch('/api/mcp/oauth/register', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          serverUrl: SERVER_URL,
-          headers: normalizeHeaders(headers),
-          clientName: DISPLAY_LABEL,
-          redirectUri,
-        }),
-      });
+    popup.document.write('<html><body style="font-family: sans-serif; background:#020617; color:#e2e8f0; display:flex; align-items:center; justify-content:center; height:100%;">Preparing authorization…</body></html>');
+    popup.document.close();
 
-      const registerData = await registerResponse.json();
-      if (!registerResponse.ok) {
-        throw new Error(registerData?.error || 'Failed to register OAuth client.');
-      }
-
-      const codeVerifier = generateRandomString(96);
-      const codeChallenge = await generateCodeChallenge(codeVerifier);
-      const state = generateState();
-
-      const rawMetadata = (metadata.raw ?? {}) as any;
-      const metadataScopes =
-        Array.isArray(rawMetadata?.scopes_supported) && rawMetadata.scopes_supported.length
-          ? (rawMetadata.scopes_supported as string[])
-          : null;
-
-      const defaultScopes = ['openid', 'https://www.googleapis.com/auth/userinfo.email', 'https://www.googleapis.com/auth/userinfo.profile'];
-      const workspaceExtras = ['https://www.googleapis.com/auth/calendar.events'];
-      const scopes = Array.from(new Set([...defaultScopes, ...workspaceExtras, ...(metadataScopes ?? [])]));
-
-      const authorizeParams = new URLSearchParams({
-        response_type: 'code',
-        client_id: registerData.client_id,
-        redirect_uri: redirectUri,
-        scope: scopes.join(' '),
-        state,
-        code_challenge: codeChallenge,
-        code_challenge_method: 'S256',
-        access_type: 'offline',
-        prompt: 'consent',
-      });
-
-      const sessionPayload: PendingOAuthSession = {
-        tokenUrl: metadata.token_url,
-        clientId: registerData.client_id,
-        clientSecret: registerData.client_secret,
-        codeVerifier,
-        redirectUri,
-        serverUrl: SERVER_URL,
-        serverLabel: DISPLAY_LABEL,
-        serviceName: CONNECTOR?.name,
-        createdAt: Date.now(),
-      };
-
+    (async () => {
       try {
-        const storage = window.localStorage;
-        storage.setItem(`mcp_oauth_state_${state}`, JSON.stringify(sessionPayload));
-        const now = Date.now();
-        for (let i = 0; i < storage.length; i += 1) {
-          const key = storage.key(i);
-          if (!key || !key.startsWith('mcp_oauth_state_')) continue;
-          try {
-            const stored = JSON.parse(storage.getItem(key) || '{}') as { createdAt?: number };
-            if (typeof stored.createdAt === 'number' && now - stored.createdAt > 15 * 60 * 1000) {
+        const existingInfo = authInfo;
+        const metadata = existingInfo?.authorize_url ? existingInfo : await fetchAuthInfo();
+        if (!metadata?.authorize_url || !metadata?.token_url) {
+          throw new Error('Missing authorization endpoints for the Google Workspace MCP server.');
+        }
+
+        const redirectUri = `${window.location.origin}/oauth/callback`;
+
+        const registerResponse = await fetch('/api/mcp/oauth/register', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            serverUrl: SERVER_URL,
+            headers: normalizeHeaders(headers),
+            clientName: DISPLAY_LABEL,
+            redirectUri,
+          }),
+        });
+
+        const registerData = await registerResponse.json();
+        if (!registerResponse.ok) {
+          throw new Error(registerData?.error || 'Failed to register OAuth client.');
+        }
+
+        const codeVerifier = generateRandomString(96);
+        const codeChallenge = await generateCodeChallenge(codeVerifier);
+        const state = generateState();
+
+        const rawMetadata = (metadata.raw ?? {}) as any;
+        const metadataScopes =
+          Array.isArray(rawMetadata?.scopes_supported) && rawMetadata.scopes_supported.length
+            ? (rawMetadata.scopes_supported as string[])
+            : null;
+
+        const defaultScopes = ['openid', 'https://www.googleapis.com/auth/userinfo.email', 'https://www.googleapis.com/auth/userinfo.profile'];
+        const workspaceExtras = ['https://www.googleapis.com/auth/calendar.events'];
+        const scopes = Array.from(new Set([...defaultScopes, ...workspaceExtras, ...(metadataScopes ?? [])]));
+
+        const authorizeParams = new URLSearchParams({
+          response_type: 'code',
+          client_id: registerData.client_id,
+          redirect_uri: redirectUri,
+          scope: scopes.join(' '),
+          state,
+          code_challenge: codeChallenge,
+          code_challenge_method: 'S256',
+          access_type: 'offline',
+          prompt: 'consent',
+        });
+
+        const sessionPayload: PendingOAuthSession = {
+          tokenUrl: metadata.token_url,
+          clientId: registerData.client_id,
+          clientSecret: registerData.client_secret,
+          codeVerifier,
+          redirectUri,
+          serverUrl: SERVER_URL,
+          serverLabel: DISPLAY_LABEL,
+          serviceName: CONNECTOR?.name,
+          createdAt: Date.now(),
+        };
+
+        try {
+          const storage = window.localStorage;
+          storage.setItem(`mcp_oauth_state_${state}`, JSON.stringify(sessionPayload));
+          const now = Date.now();
+          for (let i = 0; i < storage.length; i += 1) {
+            const key = storage.key(i);
+            if (!key || !key.startsWith('mcp_oauth_state_')) continue;
+            try {
+              const stored = JSON.parse(storage.getItem(key) || '{}') as { createdAt?: number };
+              if (typeof stored.createdAt === 'number' && now - stored.createdAt > 15 * 60 * 1000) {
+                storage.removeItem(key);
+              }
+            } catch {
               storage.removeItem(key);
             }
-          } catch {
-            storage.removeItem(key);
           }
+        } catch {
+          // ignore storage errors
         }
-      } catch {
-        // ignore storage errors
-      }
 
-      const authorizeUrl = `${metadata.authorize_url}?${authorizeParams.toString()}`;
-      const popup = window.open(
-        authorizeUrl,
-        'workspace-mcp-oauth',
-        'width=600,height=750,resizable=yes,scrollbars=yes',
-      );
-      if (!popup) {
-        throw new Error('Popup blocked. Allow popups and try again.');
+        const authorizeUrl = `${metadata.authorize_url}?${authorizeParams.toString()}`;
+        popup.location.href = authorizeUrl;
+      } catch (error: any) {
+        popup.close();
+        setAuthInfoError(error?.message || 'Failed to launch authorization.');
+        setIsAuthorizing(false);
       }
-      popup.focus();
-    } catch (error: any) {
-      setAuthInfoError(error?.message || 'Failed to launch authorization.');
-      setIsAuthorizing(false);
-    }
+    })();
   }, [authInfo, fetchAuthInfo, headers]);
 
   const handleSave = useCallback(async () => {
