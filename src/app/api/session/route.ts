@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/app/lib/auth";
 
 import type { McpServerRequestPayload } from "@/app/types/mcp";
 
@@ -63,6 +65,11 @@ async function createRealtimeSession(body: SessionRequestBody = {}) {
 }
 
 export async function POST(request: Request) {
+  const session = await getServerSession(authOptions);
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   let payload: SessionRequestBody = {};
   try {
     payload = await request.json();
@@ -75,5 +82,10 @@ export async function POST(request: Request) {
 }
 
 export async function GET() {
+  const session = await getServerSession(authOptions);
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   return createRealtimeSession();
 }

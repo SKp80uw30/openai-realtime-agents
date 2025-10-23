@@ -2,6 +2,7 @@
 
 import React, { useMemo, useState, useCallback, useEffect } from 'react';
 import { v4 as uuidv4 } from 'uuid';
+import { useSession, signIn, signOut } from 'next-auth/react';
 
 import { OrbVisualizer } from '@/app/components/orb/OrbVisualizer';
 import {
@@ -31,6 +32,7 @@ function aggregateTools(servers: McpServerConfig[]): number {
 }
 
 export default function OrbShowcase() {
+  const { data: session, status: authStatus } = useSession();
   const { addTranscriptBreadcrumb } = useTranscript();
   const { logClientEvent, logServerEvent } = useEvent();
 
@@ -80,6 +82,14 @@ export default function OrbShowcase() {
     }
     return base;
   }, [sessionStatus]);
+
+  const handleSignIn = () => {
+    void signIn('google');
+  };
+
+  const handleSignOut = () => {
+    void signOut();
+  };
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -250,6 +260,27 @@ export default function OrbShowcase() {
 
   const stateLabel = ORB_STATE_LABELS[conversationState];
 
+  if (authStatus !== 'authenticated' || !session?.user) {
+    return (
+      <div className="min-h-screen w-full bg-slate-950 text-slate-100 flex flex-col items-center justify-center gap-8 px-6">
+        <div className="text-center space-y-3">
+          <p className="text-xs uppercase tracking-[0.35em] text-cyan-200/70">Orby Voice</p>
+          <h1 className="text-3xl font-semibold text-slate-100">Sign in to continue</h1>
+          <p className="text-sm text-slate-400 max-w-md">
+            Use your Google account to unlock the orb experience and keep your workspace tools connected.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={handleSignIn}
+          className="rounded-full border border-cyan-400/40 bg-cyan-500/15 px-6 py-3 text-sm font-semibold text-cyan-100 hover:bg-cyan-500/25 transition"
+        >
+          Continue with Google
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="relative min-h-screen w-full overflow-hidden bg-slate-950 text-slate-100">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(56,189,248,0.12),transparent_60%)]" />
@@ -274,6 +305,13 @@ export default function OrbShowcase() {
             >
               {sessionIndicator.label}
             </span>
+            <button
+              type="button"
+              onClick={handleSignOut}
+              className="rounded-full border border-slate-200/20 bg-slate-800/60 px-3 py-1 text-xs font-medium text-slate-200 hover:bg-slate-700"
+            >
+              Sign out
+            </button>
           </div>
         </header>
 
