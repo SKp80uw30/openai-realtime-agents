@@ -3,6 +3,7 @@
 import React, { useMemo, useState, useCallback, useEffect } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { useSession, signIn, signOut } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
 
 import { OrbVisualizer } from '@/app/components/orb/OrbVisualizer';
 import {
@@ -32,6 +33,7 @@ function aggregateTools(servers: McpServerConfig[]): number {
 }
 
 export default function OrbShowcase() {
+  const router = useRouter();
   const { data: session, status: authStatus } = useSession();
   const { addTranscriptBreadcrumb } = useTranscript();
   const { logClientEvent, logServerEvent } = useEvent();
@@ -87,8 +89,9 @@ export default function OrbShowcase() {
     void signIn('google');
   };
 
-  const handleSignOut = () => {
-    void signOut();
+  const handleSignOut = async () => {
+    await signOut({ redirect: false });
+    router.replace('/');
   };
 
   useEffect(() => {
