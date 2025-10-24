@@ -5,12 +5,13 @@ import { authOptions } from "@/app/lib/auth";
 import type { McpServerRequestPayload } from "@/app/types/mcp";
 
 interface SessionRequestBody {
+  model?: string;
   mcpServers?: McpServerRequestPayload[];
 }
 
 async function createRealtimeSession(body: SessionRequestBody = {}) {
   try {
-    const { mcpServers = [] } = body;
+    const { model = 'gpt-realtime-mini', mcpServers = [] } = body;
     const tools = mcpServers.length
       ? mcpServers.map((server) => ({
           type: 'mcp',
@@ -23,7 +24,7 @@ async function createRealtimeSession(body: SessionRequestBody = {}) {
       : undefined;
 
     const sessionPayload = {
-      model: "gpt-realtime-mini",
+      model,
       ...(tools ? { tools } : {}),
     };
 

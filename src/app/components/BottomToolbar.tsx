@@ -15,6 +15,8 @@ interface BottomToolbarProps {
   setIsAudioPlaybackEnabled: (val: boolean) => void;
   codec: string;
   onCodecChange: (newCodec: string) => void;
+  model: string;
+  onModelChange: (newModel: string) => void;
 }
 
 function BottomToolbar({
@@ -31,6 +33,8 @@ function BottomToolbar({
   setIsAudioPlaybackEnabled,
   codec,
   onCodecChange,
+  model,
+  onModelChange,
 }: BottomToolbarProps) {
   const isConnected = sessionStatus === "CONNECTED";
   const isConnecting = sessionStatus === "CONNECTING";
@@ -132,9 +136,9 @@ function BottomToolbar({
       <div className="flex flex-row flex-wrap items-center gap-2">
         <div className="text-sm text-gray-700">Codec:</div>
         {/*
-          Codec selector – Lets you force the WebRTC track to use 8 kHz 
-          PCMU/PCMA so you can preview how the agent will sound 
-          (and how ASR/VAD will perform) when accessed via a 
+          Codec selector – Lets you force the WebRTC track to use 8 kHz
+          PCMU/PCMA so you can preview how the agent will sound
+          (and how ASR/VAD will perform) when accessed via a
           phone network.  Selecting a codec reloads the page with ?codec=...
           which our App-level logic picks up and applies via a WebRTC monkey
           patch (see codecPatch.ts).
@@ -148,6 +152,19 @@ function BottomToolbar({
           <option value="opus">Opus (48 kHz)</option>
           <option value="pcmu">PCMU (8 kHz)</option>
           <option value="pcma">PCMA (8 kHz)</option>
+        </select>
+      </div>
+
+      <div className="flex flex-row flex-wrap items-center gap-2">
+        <div className="text-sm text-gray-700">Model:</div>
+        <select
+          id="model-select"
+          value={model}
+          onChange={(e) => onModelChange(e.target.value)}
+          className="border border-gray-300 rounded-md px-2 py-1 focus:outline-none cursor-pointer"
+        >
+          <option value="gpt-realtime">gpt-realtime (Full)</option>
+          <option value="gpt-realtime-mini">gpt-realtime-mini (Cheaper)</option>
         </select>
       </div>
     </div>

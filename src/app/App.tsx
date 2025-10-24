@@ -143,6 +143,11 @@ function App() {
   );
   const [activeMcpServers, setActiveMcpServers] = useState<McpServerConfig[]>([]);
   const [areMcpServersReady, setAreMcpServersReady] = useState<boolean>(false);
+  const [selectedModel, setSelectedModel] = useState<string>(() => {
+    if (typeof window === 'undefined') return 'gpt-realtime-mini';
+    const stored = localStorage.getItem('selectedRealtimeModel');
+    return stored || 'gpt-realtime-mini';
+  });
 
   // Initialize the recording hook.
   const { startRecording, stopRecording, downloadRecording } =
@@ -243,6 +248,7 @@ function App() {
     console.log('[fetchEphemeralKey] Eligible servers after filter:', eligibleServers.length);
 
     const payload = {
+      model: selectedModel,
       mcpServers: eligibleServers.map<McpServerRequestPayload>((server) => ({
         label: server.label,
         server_url: server.serverUrl,
@@ -335,6 +341,7 @@ function App() {
           extraContext: {
             addTranscriptBreadcrumb,
           },
+          model: selectedModel,
         });
       } catch (err) {
         console.error("Error connecting via SDK:", err);
@@ -451,6 +458,15 @@ function App() {
     const url = new URL(window.location.toString());
     url.searchParams.set("codec", newCodec);
     window.location.replace(url.toString());
+  };
+
+  // Handle model change - disconnect if connected, update state, persist
+  const handleModelChange = (newModel: string) => {
+    if (sessionStatus === "CONNECTED" || sessionStatus === "CONNECTING") {
+      disconnectFromRealtime();
+    }
+    setSelectedModel(newModel);
+    localStorage.setItem('selectedRealtimeModel', newModel);
   };
 
   useEffect(() => {
@@ -688,6 +704,8 @@ function App() {
         setIsAudioPlaybackEnabled={setIsAudioPlaybackEnabled}
         codec={urlCodec}
         onCodecChange={handleCodecChange}
+        model={selectedModel}
+        onModelChange={handleModelChange}
       />
     </div>
   );

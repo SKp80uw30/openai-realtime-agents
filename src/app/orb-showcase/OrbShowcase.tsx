@@ -162,10 +162,11 @@ export default function OrbShowcase() {
     }
   }, [sessionStatus, mute, sendEvent]);
 
-  const fetchEphemeralKey = useCallback(async (servers: McpServerConfig[]) => {
+  const fetchEphemeralKey = useCallback(async (servers: McpServerConfig[], model: string = 'gpt-realtime-mini') => {
     const eligibleServers = servers.filter((server) => server.status !== 'error');
 
     const payload = {
+      model,
       mcpServers: eligibleServers.map<McpServerRequestPayload>((server) => ({
         label: server.label,
         server_url: server.serverUrl,
@@ -218,7 +219,8 @@ export default function OrbShowcase() {
       return;
     }
 
-    const key = await fetchEphemeralKey(activeMcpServers);
+    const model = 'gpt-realtime-mini'; // Default model for Orb showcase
+    const key = await fetchEphemeralKey(activeMcpServers, model);
     if (!key) {
       return;
     }
@@ -234,6 +236,7 @@ export default function OrbShowcase() {
           addTranscriptBreadcrumb,
         },
         outputGuardrails: [guardrail],
+        model,
       });
     } catch (error) {
       console.error('Unable to start realtime session', error);
