@@ -453,7 +453,7 @@ export function useRealtimeSession(callbacks: RealtimeSessionCallbacks = {}) {
             return pc;
           },
         }),
-        model: 'gpt-4o-realtime-mini',
+        // Don't specify model when using ephemeral keys - model is already set server-side
         config: {
           inputAudioFormat: audioFormat,
           outputAudioFormat: audioFormat,
