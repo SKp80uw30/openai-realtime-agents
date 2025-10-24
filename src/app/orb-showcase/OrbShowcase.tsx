@@ -90,8 +90,7 @@ export default function OrbShowcase() {
   };
 
   const handleSignOut = async () => {
-    await signOut({ redirect: false });
-    router.replace('/');
+    await signOut({ callbackUrl: '/', redirect: true });
   };
 
   useEffect(() => {
@@ -293,19 +292,21 @@ export default function OrbShowcase() {
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_bottom,rgba(168,85,247,0.08),transparent_55%)]" />
 
       <div className="relative flex min-h-screen flex-col">
-        <header className="flex items-start justify-between px-6 pt-8">
+        <header className="flex flex-wrap items-center justify-between gap-3 px-4 sm:px-6 pt-6 sm:pt-8">
           <button
             type="button"
             onClick={() => setShowToolOverlay(true)}
-            className="rounded-full border border-cyan-400/30 bg-cyan-500/10 px-4 py-2 text-sm font-medium text-cyan-100 hover:border-cyan-300/60 hover:bg-cyan-500/15 transition"
+            className="rounded-full border border-cyan-400/30 bg-cyan-500/10 px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium text-cyan-100 hover:border-cyan-300/60 hover:bg-cyan-500/15 transition whitespace-nowrap"
           >
             {toolLabel}
           </button>
 
-          <div className="flex items-center gap-3">
-            <span className="rounded-full border border-slate-200/15 bg-slate-800/40 px-3 py-1 text-xs font-semibold uppercase tracking-[0.3em] text-slate-200/90">
-              {stateLabel}
-            </span>
+          <div className="flex flex-wrap items-center justify-end gap-2 sm:gap-3">
+            {sessionStatus === 'CONNECTED' && (
+              <span className="rounded-full border border-slate-200/15 bg-slate-800/40 px-3 py-1 text-xs font-semibold uppercase tracking-[0.3em] text-slate-200/90">
+                {stateLabel}
+              </span>
+            )}
             <span
               className={`rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-wide ${sessionIndicator.color}`}
             >
@@ -314,7 +315,7 @@ export default function OrbShowcase() {
             <button
               type="button"
               onClick={handleSignOut}
-              className="rounded-full border border-slate-200/20 bg-slate-800/60 px-3 py-1 text-xs font-medium text-slate-200 hover:bg-slate-700"
+              className="rounded-full border border-slate-200/20 bg-slate-800/60 px-3 py-1 text-xs font-medium text-slate-200 hover:bg-slate-700 whitespace-nowrap"
             >
               Sign out
             </button>
