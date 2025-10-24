@@ -23,7 +23,7 @@ async function createRealtimeSession(body: SessionRequestBody = {}) {
       : undefined;
 
     const sessionPayload = {
-      model: "gpt-4o-realtime-mini",
+      model: "gpt-realtime-mini",
       ...(tools ? { tools } : {}),
     };
 
