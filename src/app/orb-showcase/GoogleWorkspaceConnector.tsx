@@ -409,17 +409,30 @@ export function GoogleWorkspaceConnector({ servers, onClose, onConnected }: Prop
         )}
 
         <div className="space-y-2">
-          <p className="text-xs uppercase tracking-[0.35em] text-slate-400">Step 1</p>
+          <div className="flex items-center gap-2">
+            <p className="text-xs uppercase tracking-[0.35em] text-slate-400">Step 1</p>
+            {tokenReceived && (
+              <span className="rounded-full border border-emerald-400/30 bg-emerald-500/10 px-2 py-0.5 text-[0.6rem] font-semibold uppercase tracking-[0.35em] text-emerald-200">
+                Complete
+              </span>
+            )}
+          </div>
           <button
             type="button"
             onClick={handleAuthorize}
-            disabled={isAuthorizing || isAuthInfoLoading}
+            disabled={isAuthorizing || isAuthInfoLoading || tokenReceived}
             className="w-full rounded-full border border-cyan-300/40 bg-cyan-500/10 px-4 py-3 text-sm font-semibold text-cyan-100 hover:bg-cyan-500/20 disabled:cursor-not-allowed disabled:border-slate-400/20 disabled:bg-slate-700/40 disabled:text-slate-300"
           >
-            {isAuthorizing ? 'Waiting for authorization…' : 'Authorize Google Workspace'}
+            {tokenReceived
+              ? '✓ Authorized'
+              : isAuthorizing
+                ? 'Waiting for authorization…'
+                : 'Authorize Google Workspace'}
           </button>
           <p className="text-xs text-slate-400/70">
-            Launches the Google Workspace OAuth flow in a new window. Approve access and return here to finish.
+            {tokenReceived
+              ? 'Authorization complete! Proceed to Step 2 to save the server.'
+              : 'Launches the Google Workspace OAuth flow in a new window. Approve access and return here to finish.'}
           </p>
         </div>
 
