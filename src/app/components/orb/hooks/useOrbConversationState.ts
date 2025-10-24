@@ -24,10 +24,15 @@ function getLatestByRole(items: TranscriptItem[], role: 'user' | 'assistant'): T
 }
 
 export function useOrbConversationState({ sessionStatus }: UseOrbConversationStateOptions): OrbState {
-  const { transcriptItems } = useTranscript();
+  const { transcriptItems, isToolExecuting } = useTranscript();
 
   return useMemo(() => {
     if (sessionStatus !== 'CONNECTED') return OrbState.Idle;
+
+    // Check if tools are executing first - highest priority
+    if (isToolExecuting) {
+      return OrbState.Working;
+    }
 
     const messages = transcriptItems.filter((item) => item.type === MESSAGE_TYPE);
     if (messages.length === 0) return OrbState.Ready;
@@ -64,5 +69,5 @@ export function useOrbConversationState({ sessionStatus }: UseOrbConversationSta
     }
 
     return OrbState.Ready;
-  }, [sessionStatus, transcriptItems]);
+  }, [sessionStatus, transcriptItems, isToolExecuting]);
 }

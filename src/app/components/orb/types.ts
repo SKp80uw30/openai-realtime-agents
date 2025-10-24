@@ -5,6 +5,7 @@ export enum OrbState {
   Thinking = 'thinking',
   Speaking = 'speaking',
   Interrupted = 'interrupted',
+  Working = 'working',
 }
 
 export enum OrbTheme {
@@ -51,4 +52,5 @@ export const ORB_STATE_LABELS: Record<OrbState, string> = {
   [OrbState.Thinking]: 'Thinking',
   [OrbState.Speaking]: 'Speaking',
   [OrbState.Interrupted]: 'Interrupted',
+  [OrbState.Working]: 'Working',
 };

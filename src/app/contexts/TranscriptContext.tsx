@@ -22,12 +22,15 @@ type TranscriptContextValue = {
   addTranscriptBreadcrumb: (title: string, data?: Record<string, any>) => void;
   toggleTranscriptItemExpand: (itemId: string) => void;
   updateTranscriptItem: (itemId: string, updatedProperties: Partial<TranscriptItem>) => void;
+  isToolExecuting: boolean;
+  setIsToolExecuting: (executing: boolean) => void;
 };
 
 const TranscriptContext = createContext<TranscriptContextValue | undefined>(undefined);
 
 export const TranscriptProvider: FC<PropsWithChildren> = ({ children }) => {
   const [transcriptItems, setTranscriptItems] = useState<TranscriptItem[]>([]);
+  const [isToolExecuting, setIsToolExecuting] = useState(false);
 
   function newTimestampPretty(): string {
     const now = new Date();
@@ -120,6 +123,8 @@ export const TranscriptProvider: FC<PropsWithChildren> = ({ children }) => {
         addTranscriptBreadcrumb,
         toggleTranscriptItemExpand,
         updateTranscriptItem,
+        isToolExecuting,
+        setIsToolExecuting,
       }}
     >
       {children}

@@ -8,6 +8,7 @@ import {
 import { audioFormatForCodec, applyCodecPreferences } from '../lib/codecUtils';
 import { useEvent } from '../contexts/EventContext';
 import { useHandleSessionHistory } from './useHandleSessionHistory';
+import { useTranscript } from '../contexts/TranscriptContext';
 import { SessionStatus } from '../types';
 
 export interface RealtimeSessionCallbacks {
@@ -29,6 +30,7 @@ export function useRealtimeSession(callbacks: RealtimeSessionCallbacks = {}) {
     SessionStatus
   >('DISCONNECTED');
   const { logClientEvent } = useEvent();
+  const { setIsToolExecuting } = useTranscript();
 
   const updateStatus = useCallback(
     (s: SessionStatus) => {
@@ -47,6 +49,7 @@ export function useRealtimeSession(callbacks: RealtimeSessionCallbacks = {}) {
   const pendingMcpApprovalRef = useRef<Map<string, { responseId: string; outputIndex?: number }>>(new Map());
   const pendingMcpCallsRef = useRef<Map<string, { callId: string; responseId?: string; toolName: string; serverLabel: string; outputIndex?: number; logged: boolean }>>(new Map());
   const mcpCallFollowupTriggeredRef = useRef<Set<string>>(new Set());
+  const activeToolCallsRef = useRef<Set<string>>(new Set());
 
   const handleTransportEvent = useCallback((event: any) => {
     // Handle additional server events that aren't managed by the session
@@ -286,6 +289,12 @@ export function useRealtimeSession(callbacks: RealtimeSessionCallbacks = {}) {
         call_id: functionCall?.call_id,
       }, '(start)');
       historyHandlersRef.current.handleAgentToolStart(details, agent, functionCall);
+
+      // Track tool execution state
+      if (functionCall?.call_id) {
+        activeToolCallsRef.current.add(functionCall.call_id);
+        setIsToolExecuting(true);
+      }
     };
     const agentToolEndListener = (
       details: any,
@@ -302,6 +311,15 @@ export function useRealtimeSession(callbacks: RealtimeSessionCallbacks = {}) {
         result,
       }, '(end)');
       historyHandlersRef.current.handleAgentToolEnd(details, agent, functionCall, result);
+
+      // Update tool execution state
+      if (functionCall?.call_id) {
+        activeToolCallsRef.current.delete(functionCall.call_id);
+        // Only set to false if no more active tool calls
+        if (activeToolCallsRef.current.size === 0) {
+          setIsToolExecuting(false);
+        }
+      }
     };
     const historyUpdatedListener = (items: any[]) => {
       historyHandlersRef.current.handleHistoryUpdated(items);
@@ -435,7 +453,7 @@ export function useRealtimeSession(callbacks: RealtimeSessionCallbacks = {}) {
             return pc;
           },
         }),
-        model: 'gpt-4o-realtime-preview-2025-06-03',
+        model: 'gpt-4o-realtime-mini',
         config: {
           inputAudioFormat: audioFormat,
           outputAudioFormat: audioFormat,

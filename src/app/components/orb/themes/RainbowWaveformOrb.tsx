@@ -17,6 +17,7 @@ const STATE_GLOW: Record<OrbState, string> = {
   [OrbState.Thinking]: 'rgba(129, 140, 248, 0.55)',
   [OrbState.Speaking]: 'rgba(249, 115, 22, 0.6)',
   [OrbState.Interrupted]: 'rgba(248, 113, 113, 0.65)',
+  [OrbState.Working]: 'rgba(34, 197, 94, 0.65)', // Green for working/tool execution
 };
 
 const BASE_SIZE = 260;
