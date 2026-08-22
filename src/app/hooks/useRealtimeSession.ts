@@ -219,10 +219,12 @@ export function useRealtimeSession(callbacks: RealtimeSessionCallbacks = {}) {
         historyHandlersRef.current.handleTranscriptionCompleted(event);
         break;
       }
+      case 'response.output_audio_transcript.done':
       case 'response.audio_transcript.done': {
         historyHandlersRef.current.handleTranscriptionCompleted(event);
         break;
       }
+      case 'response.output_audio_transcript.delta':
       case 'response.audio_transcript.delta': {
         historyHandlersRef.current.handleTranscriptionDelta(event);
         break;
@@ -457,10 +459,17 @@ export function useRealtimeSession(callbacks: RealtimeSessionCallbacks = {}) {
         }),
         model,
         config: {
-          inputAudioFormat: audioFormat,
-          outputAudioFormat: audioFormat,
-          inputAudioTranscription: {
-            model: 'gpt-4o-mini-transcribe',
+          outputModalities: ['audio'],
+          audio: {
+            input: {
+              format: audioFormat,
+              transcription: {
+                model: 'gpt-4o-mini-transcribe',
+              },
+            },
+            output: {
+              format: audioFormat,
+            },
           },
         },
         outputGuardrails: outputGuardrails ?? [],

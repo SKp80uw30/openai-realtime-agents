@@ -1,8 +1,11 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/lib/auth";
+import OpenAI from "openai";
 
 import type { McpServerRequestPayload } from "@/app/types/mcp";
+
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 interface SessionRequestBody {
   model?: string;
@@ -14,48 +17,53 @@ async function createRealtimeSession(body: SessionRequestBody = {}) {
     const { model = 'gpt-realtime-mini', mcpServers = [] } = body;
     const tools = mcpServers.length
       ? mcpServers.map((server) => ({
-          type: 'mcp',
+          type: 'mcp' as const,
           server_label: server.label,
           server_url: server.server_url,
           headers: server.headers,
           allowed_tools: server.allowed_tools,
-          require_approval: 'never',  // Auto-execute MCP calls without approval (we trust this server)
+          require_approval: 'never' as const,  // Auto-execute MCP calls without approval (we trust this server)
         }))
       : undefined;
 
-    const sessionPayload = {
+    const sessionConfig = {
+      type: 'realtime' as const,
       model,
+      output_modalities: ['audio' as const],
+      audio: {
+        input: {
+          format: { type: 'audio/pcm' as const, rate: 24000 },
+          transcription: {
+            model: 'gpt-4o-mini-transcribe',
+          },
+        },
+        output: {
+          format: { type: 'audio/pcm' as const, rate: 24000 },
+        },
+      },
       ...(tools ? { tools } : {}),
     };
 
     // Log what we're sending to OpenAI (redact auth tokens for security)
     console.log('[Session Create] Sending to OpenAI:', JSON.stringify({
-      ...sessionPayload,
-      tools: sessionPayload.tools?.map((t: any) => ({
+      ...sessionConfig,
+      tools: sessionConfig.tools?.map((t: any) => ({
         ...t,
         headers: t.headers ? Object.keys(t.headers) : undefined, // Only show header keys, not values
       })),
     }, null, 2));
 
-    const response = await fetch(
-      "https://api.openai.com/v1/realtime/sessions",
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(sessionPayload),
-      }
-    );
-    const data = await response.json();
+    const data = await openai.realtime.clientSecrets.create({
+      session: sessionConfig as any,
+    });
 
-    console.log('[Session Create] OpenAI response status:', response.status);
-    if (!response.ok) {
-      console.error('[Session Create] OpenAI error:', JSON.stringify(data, null, 2));
-    }
-
-    return NextResponse.json(data, { status: response.status });
+    return NextResponse.json({
+      client_secret: {
+        value: data.value,
+        expires_at: data.expires_at,
+      },
+      session: data.session,
+    });
   } catch (error) {
     console.error("Error in /session:", error);
     return NextResponse.json(
