@@ -32,8 +32,11 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# Ignore all env files except .env.sample
+# Ignore all env files except .env.sample and .env.production.example
 .env
+.env.local
+.env.production
+.env*.local
 
 
 # vercel
@@ -44,3 +47,4 @@ yarn-error.log*
 next-env.d.ts
 todo.md
 test-mcp-direct.ts
+.gitnexus
