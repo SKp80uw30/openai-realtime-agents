@@ -48,3 +48,6 @@ next-env.d.ts
 todo.md
 test-mcp-direct.ts
 .gitnexus
+
+# Local Netlify folder
+.netlify
