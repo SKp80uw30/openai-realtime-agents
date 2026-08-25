@@ -22,7 +22,7 @@ import {
   personalAssistantCompanyName,
 } from '@/app/agentConfigs/personalAssistant';
 import type { McpServerConfig, McpServerRequestPayload } from '@/app/types/mcp';
-import GoogleWorkspaceConnector from './GoogleWorkspaceConnector';
+import ToolsOverlay from './ToolsOverlay';
 
 const STORAGE_KEY = 'mcpServers:personalAssistant';
 const DEFAULT_THEME = OrbTheme.Holographic;
@@ -266,12 +266,33 @@ export default function OrbShowcase() {
   if (authStatus !== 'authenticated' || !session?.user) {
     return (
       <div className="min-h-screen w-full bg-slate-950 text-slate-100 flex flex-col items-center justify-center gap-8 px-6">
-        <div className="text-center space-y-3">
-          <p className="text-xs uppercase tracking-[0.35em] text-cyan-200/70">Orby Voice</p>
-          <h1 className="text-3xl font-semibold text-slate-100">Sign in to continue</h1>
-          <p className="text-sm text-slate-400 max-w-md">
-            Use your Google account to unlock the orb experience and keep your workspace tools connected.
+        <div className="text-center space-y-4 max-w-lg">
+          <div className="flex items-center justify-center gap-2">
+            <p className="text-xs uppercase tracking-[0.35em] text-cyan-200/70">Orby Voice</p>
+            <span className="rounded-full border border-amber-400/40 bg-amber-500/10 px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wide text-amber-200">
+              Research Preview
+            </span>
+          </div>
+          <h1 className="text-3xl font-semibold text-slate-100">A voice assistant for your hands-free day</h1>
+          <p className="text-sm text-slate-400">
+            Talk to Orby like a real assistant — check your calendar, manage email, and get things done across
+            Google Workspace, no typing required.
           </p>
+          <ul className="mx-auto max-w-sm space-y-1.5 text-left text-sm text-slate-400">
+            <li className="flex gap-2">
+              <span className="text-cyan-400">•</span>
+              Speak naturally — Orby listens and replies in real time
+            </li>
+            <li className="flex gap-2">
+              <span className="text-cyan-400">•</span>
+              Connects to Gmail, Calendar, Drive, and more
+            </li>
+            <li className="flex gap-2">
+              <span className="text-cyan-400">•</span>
+              Early preview — expect some rough edges as we improve it
+            </li>
+          </ul>
+          <p className="pt-2 text-sm text-slate-300">Sign in with Google to get started</p>
         </div>
         <button
           type="button"
@@ -291,13 +312,18 @@ export default function OrbShowcase() {
 
       <div className="relative flex min-h-screen flex-col">
         <header className="flex flex-wrap items-center justify-between gap-3 px-4 sm:px-6 pt-6 sm:pt-8">
-          <button
-            type="button"
-            onClick={() => setShowToolOverlay(true)}
-            className="rounded-full border border-cyan-400/30 bg-cyan-500/10 px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium text-cyan-100 hover:border-cyan-300/60 hover:bg-cyan-500/15 transition whitespace-nowrap"
-          >
-            {toolLabel}
-          </button>
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+            <button
+              type="button"
+              onClick={() => setShowToolOverlay(true)}
+              className="rounded-full border border-cyan-400/30 bg-cyan-500/10 px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium text-cyan-100 hover:border-cyan-300/60 hover:bg-cyan-500/15 transition whitespace-nowrap"
+            >
+              {toolLabel}
+            </button>
+            <span className="rounded-full border border-amber-400/30 bg-amber-500/10 px-3 py-1 text-[0.65rem] font-semibold uppercase tracking-wide text-amber-200 whitespace-nowrap">
+              Research Preview
+            </span>
+          </div>
 
           <div className="flex flex-wrap items-center justify-end gap-2 sm:gap-3">
             {sessionStatus === 'CONNECTED' && (
@@ -363,7 +389,7 @@ export default function OrbShowcase() {
 
       {showToolOverlay && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-950/70 px-4">
-          <GoogleWorkspaceConnector
+          <ToolsOverlay
             servers={activeMcpServers}
             onClose={() => setShowToolOverlay(false)}
             onConnected={(serversWithWorkspace) => setActiveMcpServers(serversWithWorkspace)}
