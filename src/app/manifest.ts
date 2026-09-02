@@ -12,9 +12,9 @@ export default function manifest(): MetadataRoute.Manifest {
     orientation: 'portrait',
     icons: [
       {
-        src: '/openai-logomark.svg',
-        sizes: 'any',
-        type: 'image/svg+xml',
+        src: '/orby-logo.png',
+        sizes: '368x368',
+        type: 'image/png',
         purpose: 'maskable',
       },
       {

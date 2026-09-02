@@ -593,11 +593,11 @@ function App() {
           onClick={() => window.location.reload()}
         >
           <Image
-            src="/openai-logomark.svg"
-            alt="OpenAI Logo"
+            src="/orby-logo.png"
+            alt="Orby Logo"
             width={20}
             height={20}
-            className="mr-2"
+            className="mr-2 rounded-full"
           />
           <span>
             Realtime API <span className="text-gray-500">Agents</span>
