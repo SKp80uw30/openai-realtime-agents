@@ -23,7 +23,11 @@ import {
   personalAssistantCompanyName,
 } from '@/app/agentConfigs/personalAssistant';
 import type { McpServerConfig, McpServerRequestPayload } from '@/app/types/mcp';
+import { ONBOARDING_STAGE } from '@/app/types/onboarding';
 import ToolsOverlay from './ToolsOverlay';
+import { useOnboarding } from './onboarding/useOnboarding';
+import OnboardingWizard from './onboarding/OnboardingWizard';
+import CapabilityChecklist from './onboarding/CapabilityChecklist';
 
 const STORAGE_KEY = 'mcpServers:personalAssistant';
 const DEFAULT_THEME = OrbTheme.Holographic;
@@ -105,6 +109,15 @@ export default function OrbShowcase() {
 
   const conversationState = useOrbConversationState({ sessionStatus });
   const analysis = useOrbAudioAnalysis({ audioElement: sdkAudioElement, enabled: sessionStatus === 'CONNECTED' });
+
+  const isAuthenticated = authStatus === 'authenticated' && Boolean(session?.user);
+  const onboarding = useOnboarding(isAuthenticated);
+  const isWorkspaceConnected = activeMcpServers.length > 0;
+  const showOnboardingWizard =
+    isAuthenticated &&
+    isWorkspaceConnected &&
+    onboarding.stage !== null &&
+    onboarding.stage < ONBOARDING_STAGE.Listening;
 
   const totalTools = aggregateTools(activeMcpServers);
 
@@ -385,6 +398,7 @@ export default function OrbShowcase() {
             <span className="rounded-full border border-amber-400/30 bg-amber-500/10 px-3 py-1 text-[0.65rem] font-semibold uppercase tracking-wide text-amber-200 whitespace-nowrap">
               Research Preview
             </span>
+            <CapabilityChecklist data={onboarding.capabilities} />
           </div>
 
           <div className="flex flex-wrap items-center justify-end gap-2 sm:gap-3">
@@ -455,6 +469,22 @@ export default function OrbShowcase() {
             servers={activeMcpServers}
             onClose={() => setShowToolOverlay(false)}
             onConnected={(serversWithWorkspace) => setActiveMcpServers(serversWithWorkspace)}
+          />
+        </div>
+      )}
+
+      {showOnboardingWizard && onboarding.stage !== null && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 px-4">
+          <OnboardingWizard
+            stage={onboarding.stage}
+            contacts={onboarding.contacts}
+            categories={onboarding.categories}
+            onAddContact={onboarding.addContact}
+            onRemoveContact={onboarding.removeContact}
+            onAddCategory={onboarding.addCategory}
+            onRemoveCategory={onboarding.removeCategory}
+            onSetStage={onboarding.setStage}
+            onCompleteCapability={onboarding.completeCapability}
           />
         </div>
       )}
