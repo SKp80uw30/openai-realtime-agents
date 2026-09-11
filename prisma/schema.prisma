@@ -16,6 +16,10 @@ model User {
   accounts      Account[]
   sessions      Session[]
   workspaceCredentials WorkspaceCredential[]
+  onboardingProgress   OnboardingProgress?
+  contacts             Contact[]
+  emailCategories      EmailCategory[]
+  capabilityProgress   UserCapabilityProgress[]
   createdAt     DateTime             @default(now())
   updatedAt     DateTime             @updatedAt
 }
@@ -63,4 +67,69 @@ model WorkspaceCredential {
   expiresAt     DateTime
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
+}
+
+// --- Hands-free email: onboarding & priority data ---
+
+model OnboardingProgress {
+  id        String   @id @default(cuid())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String   @unique
+  // 0 Setup / 1 Priorities / 2 Listening / 3 Responding / 4 Acting
+  stage     Int      @default(0)
+  updatedAt DateTime @updatedAt
+}
+
+model Contact {
+  id       String  @id @default(cuid())
+  user     User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId   String
+  email    String
+  name     String?
+  // 0 normal, 1 VIP
+  priority Int     @default(0)
+
+  @@unique([userId, email])
+}
+
+model EmailCategory {
+  id       String   @id @default(cuid())
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId   String
+  name     String
+  keywords String[]
+  priority Int      @default(0)
+
+  @@unique([userId, name])
+}
+
+// --- Gamified skills checklist: generic, reusable across future "Handsfree X" domains ---
+
+model CapabilityGroup {
+  id           String       @id @default(cuid())
+  key          String       @unique
+  label        String
+  capabilities Capability[]
+}
+
+model Capability {
+  id       String                   @id @default(cuid())
+  group    CapabilityGroup          @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  groupId  String
+  key      String                   @unique
+  label    String
+  hint     String
+  order    Int                      @default(0)
+  progress UserCapabilityProgress[]
+}
+
+model UserCapabilityProgress {
+  id               String     @id @default(cuid())
+  user             User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId           String
+  capability       Capability @relation(fields: [capabilityId], references: [id], onDelete: Cascade)
+  capabilityId     String
+  firstCompletedAt DateTime   @default(now())
+
+  @@unique([userId, capabilityId])
 }
