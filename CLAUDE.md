@@ -80,6 +80,8 @@ Demonstrated in `src/app/agentConfigs/customerServiceRetail/` and `src/app/agent
 - `chatSupervisor` - Chat-supervisor hybrid pattern
 - `personalAssistant` - Personal assistant with MCP integration (default for Orby)
 
+**Note**: `emailAgent` (`src/app/agentConfigs/emailAgent/`) is *not* in this registry — it's Orby's actual production path, not a demo scenario. See "Hands-Free Email Feature" below.
+
 Each agent config exports an array of `RealtimeAgent` objects with:
 - `name` - Unique identifier
 - `handoffDescription` - Context for agent transfer tool
@@ -104,6 +106,8 @@ Key responsibilities:
 3. Client establishes WebRTC connection using ephemeral key
 4. Audio streams bidirectionally; agent responses trigger via server VAD
 5. MCP tool calls are intercepted, approved, and results returned to conversation
+
+**Approval gating**: `require_approval` is `'never'` by default (auto-execute, matching the original behavior) unless the client explicitly requests approval for specific tools. `OrbShowcase.tsx`'s `computeRequireApproval` does this for Gmail send/delete — see "Hands-Free Email Feature" below for why and how the approval is actually decided (not auto-approved).
 
 ### MCP (Model Context Protocol) Integration
 
@@ -147,8 +151,79 @@ Key responsibilities:
 - `Account` - OAuth provider accounts (Google) with tokens
 - `Session` - NextAuth sessions (used for database strategy, though we use JWT)
 - `WorkspaceCredential` - Google Workspace OAuth tokens for MCP integration
+- `OnboardingProgress`, `Contact`, `EmailCategory` - hands-free email onboarding state (see below)
+- `CapabilityGroup`, `Capability`, `UserCapabilityProgress` - generic gamified skills checklist (see below)
 
 **Note**: The app uses JWT session strategy but keeps the Prisma adapter to persist user accounts in the database. This hybrid approach requires careful JWT callback configuration.
+
+## Hands-Free Email Feature
+
+Orby's flagship feature: managing an entire inbox by voice, hands-off, driving-safe. Built across
+`todo-handsfree-email.md`'s phased plan — read that file for full design rationale and the phase-by-phase build log
+(including several architecture corrections discovered while implementing, documented inline per phase).
+
+### The trust ladder (`OnboardingProgress.stage`, 0-4)
+
+`src/app/types/onboarding.ts`'s `ONBOARDING_STAGE`: `Setup` (0) → `Priorities` (1) → `Listening` (2) → `Responding`
+(3) → `Acting` (4). Stages 0-1 are screen-based setup (VIP contacts, categories); stages 2-4 are voice/hands-free,
+each unlocking more capability. `getEmailStagePermissions(stage)` (`emailAgent/stagePermissions.ts`) is the single
+source of truth for what's allowed at each stage — both the `emailAgent` instructions and any future runtime
+enforcement should read from this, not duplicate the logic.
+
+**Advancement is usage-evidence-based, not manual**: `computeAdvancedStage` (`emailAgent/stageAdvancement.ts`)
+auto-advances a user once they've used the prerequisite capabilities enough times (`UserCapabilityProgress.useCount`,
+thresholds `RESPONDING_UNLOCK_USES`/`ACTING_UNLOCK_USES`). Evaluated inside `POST /api/capabilities/:key/complete` on
+every call.
+
+### `emailAgent` (`src/app/agentConfigs/emailAgent/`)
+
+A dedicated `RealtimeAgent`, separate from `personalAssistant`, built via `createEmailAgent({ stage, contacts,
+categories })` — instructions are assembled **client-side per session** (this app has no server-side agent-assembly
+step; `RealtimeAgent` objects are constructed in `OrbShowcase.tsx` and passed straight into `connect()`). Reached via
+a stage-gated handoff: `createPersonalAssistantScenario({ stage, contacts, categories })` (in
+`personalAssistant/index.ts`, alongside the original static `personalAssistantAgent`/`personalAssistantScenario`
+exports which are untouched and still used by `App.tsx`/the scenario registry) only wires up the handoff once
+`stage >= Listening`.
+
+### Confirmation-before-irreversible-action (send/delete)
+
+**This is the safety-critical piece — read `todo-handsfree-email.md`'s Phase 5 section before touching it.**
+
+A pre-existing gap this feature closed: `/api/session` used to hard-code `require_approval: 'never'`, so every Gmail
+tool call — including send and delete — auto-executed with zero confirmation. Now:
+- `OrbShowcase.tsx`'s `computeRequireApproval` classifies each connected MCP server's known tools via
+  `classifyIrreversibleGmailAction` (`emailAgent/irreversibleActions.ts`) into explicit `always`/`never` approval
+  buckets, sent per-session to `/api/session`.
+- `useRealtimeSession.ts`'s `mcp_approval_request` handler (previously auto-approved everything) now checks the most
+  recent user utterance (`lastUserUtteranceRef`, fed from `conversation.item.input_audio_transcription.completed`)
+  against an exact, action-specific word via `utteranceConfirms` — never a generic "yes", never cross-accepting the
+  wrong action's word. Approves only on a genuine match; denies (and still triggers `response.create`) otherwise.
+- This applies **session-wide**, regardless of which agent is active or what onboarding stage the user is on — it
+  also protects `personalAssistant`'s own pre-existing Gmail send capability, not just `emailAgent`.
+- **Known API constraint**: approving an MCP call triggers immediate execution — there is no server-side
+  pending/delay state to build a "cancel within N seconds" undo window into. The safety property is that the
+  confirmation must exist *before* approval is granted, not as a post-approval cancellation.
+
+### Gamified skills checklist (`CapabilityGroup`/`Capability`/`UserCapabilityProgress`)
+
+Generic and reusable — **not** email-specific — so a future "Handsfree Calendar" or "Handsfree Slack" checklist just
+adds a new `CapabilityGroup` row and its `Capability` rows, no schema changes. `prisma/seed.js` seeds the
+`handsfree-email` group's 7 capabilities; **if `/api/capabilities` ever 500s with "capability group not seeded,"
+re-run `npx prisma db seed`** (this dev environment's Postgres instance has been observed to reset between sessions,
+wiping seed data and `_prisma_migrations` history — if that happens, re-baseline with
+`prisma migrate resolve --applied <migration>` for each already-reflected migration before `prisma migrate deploy`).
+`useOnboarding.ts` (`src/app/orb-showcase/onboarding/`) centralizes all reads/writes; `CapabilityChecklist.tsx` is
+the header widget.
+
+### To add a new "Handsfree X" domain later
+
+1. Seed a new `CapabilityGroup` (key like `handsfree-calendar`) with its own `Capability` rows.
+2. Build a dedicated agent factory (`createCalendarAgent({ stage, ... })`) following `emailAgent`'s pattern — narrow
+   instructions, its own stage-permissions function if the trust-ladder concept applies there too.
+3. Wire a stage-gated handoff from `personalAssistant` the same way `createPersonalAssistantScenario` does for
+   `emailAgent`.
+4. Reuse `CapabilityChecklist.tsx` as-is (it already renders whatever group `GET /api/capabilities` returns) or
+   parameterize it if multiple groups need to show at once.
 
 ## Common Gotchas
 
@@ -167,6 +242,9 @@ MCP servers must include valid authentication headers (Bearer tokens, OAuth toke
 
 ### Audio Element Management
 The OrbShowcase creates a hidden `<audio>` element for Realtime API audio playback. This must be created client-side only (`typeof window !== 'undefined'`) and cleaned up on unmount to prevent memory leaks.
+
+### Dynamic Route `params` Must Be Awaited
+Next.js 15 makes `params` a `Promise` in route handlers with dynamic segments (e.g. `[key]`). Typing it as a plain object and accessing `params.key` synchronously still runs today but logs a console error on every request (`Route "..." used params.key. params should be awaited`). Type it `{ params: Promise<{ key: string }> }` and `const { key } = await params;`.
 
 ## Deployment (Railway)
 
@@ -199,7 +277,7 @@ Guardrail configuration is in `src/app/agentConfigs/guardrails.ts`.
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **openai-realtime-agents** (1574 symbols, 2055 relationships, 29 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **openai-realtime-agents** (1581 symbols, 2062 relationships, 29 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
 

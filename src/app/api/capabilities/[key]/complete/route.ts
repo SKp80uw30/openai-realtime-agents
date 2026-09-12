@@ -5,16 +5,17 @@ import prisma from "@/app/lib/prisma";
 import { computeAdvancedStage } from "@/app/agentConfigs/emailAgent/stageAdvancement";
 import { OnboardingStage } from "@/app/types/onboarding";
 
-export async function POST(_request: Request, { params }: { params: { key: string } }) {
+export async function POST(_request: Request, { params }: { params: Promise<{ key: string }> }) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const userId = session.user.id;
+  const { key } = await params;
 
-  const capability = await prisma.capability.findUnique({ where: { key: params.key } });
+  const capability = await prisma.capability.findUnique({ where: { key } });
   if (!capability) {
-    return NextResponse.json({ error: `Unknown capability "${params.key}"` }, { status: 404 });
+    return NextResponse.json({ error: `Unknown capability "${key}"` }, { status: 404 });
   }
 
   // Idempotent for the checklist's purposes (firstCompletedAt only ever set
