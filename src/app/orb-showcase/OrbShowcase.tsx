@@ -102,16 +102,6 @@ const LANDING_CAPABILITIES: { label: string; icon: React.ReactNode }[] = [
       </svg>
     ),
   },
-  {
-    label: 'Voice, in real time',
-    icon: (
-      <svg {...ICON_PROPS}>
-        <rect x="9" y="2" width="6" height="12" rx="3" />
-        <path d="M5 10a7 7 0 0 0 14 0" />
-        <path d="M12 19v3" />
-      </svg>
-    ),
-  },
 ];
 
 export default function OrbShowcase() {
@@ -469,20 +459,25 @@ export default function OrbShowcase() {
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_bottom,rgba(168,85,247,0.12),transparent_55%)]" />
 
         <div className="relative flex h-screen flex-col items-center overflow-hidden px-6 py-6 sm:py-8">
-          <p className="text-sm font-semibold uppercase tracking-[0.6em] text-slate-200">Orby</p>
+          <div className="flex w-full items-center justify-between">
+            <p className="text-sm font-semibold uppercase tracking-[0.6em] text-slate-200">Orby</p>
+            <span className="text-[0.65rem] font-medium uppercase tracking-[0.2em] text-slate-500">
+              Research Preview
+            </span>
+          </div>
 
           <div className="flex w-full flex-1 flex-col items-center justify-center gap-5 text-center">
             <div className="w-[min(46vw,220px)] sm:w-[min(38vw,280px)]">
               <OrbVisualizer theme={theme} state={OrbState.Idle} analysis={analysis} />
             </div>
 
-            <div className="max-w-xl space-y-3">
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-cyan-300/30 bg-cyan-500/10 px-3 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.25em] text-cyan-200 shadow-[0_0_20px_rgba(56,189,248,0.15)]">
-                Research Preview
-              </span>
+            <div className="max-w-xl space-y-1">
               <h1 className="text-3xl font-semibold tracking-tight text-white sm:text-4xl">
-                Hands-free email, by voice
+                Hands-Free Email
               </h1>
+              <p className="text-lg font-medium tracking-tight text-slate-400 sm:text-xl">
+                AI Voice Agent
+              </p>
             </div>
 
             <button
@@ -490,7 +485,7 @@ export default function OrbShowcase() {
               onClick={handleSignIn}
               className="group relative overflow-hidden rounded-full border border-cyan-300/40 bg-gradient-to-r from-cyan-500/20 via-sky-500/20 to-purple-500/20 px-8 py-3.5 text-base font-semibold text-white shadow-[0_0_30px_rgba(56,189,248,0.3)] transition hover:border-cyan-200/60 hover:shadow-[0_0_50px_rgba(168,85,247,0.45)]"
             >
-              <span className="relative">Continue with Google</span>
+              <span className="relative">Login with Google</span>
             </button>
 
             <div className="flex flex-wrap items-center justify-center gap-2.5">
