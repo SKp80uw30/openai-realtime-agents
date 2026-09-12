@@ -76,16 +76,6 @@ const ICON_PROPS = {
 
 const LANDING_CAPABILITIES: { label: string; icon: React.ReactNode }[] = [
   {
-    label: 'Voice, in real time',
-    icon: (
-      <svg {...ICON_PROPS}>
-        <rect x="9" y="2" width="6" height="12" rx="3" />
-        <path d="M5 10a7 7 0 0 0 14 0" />
-        <path d="M12 19v3" />
-      </svg>
-    ),
-  },
-  {
     label: 'Gmail',
     icon: (
       <svg {...ICON_PROPS}>
@@ -109,6 +99,16 @@ const LANDING_CAPABILITIES: { label: string; icon: React.ReactNode }[] = [
       <svg {...ICON_PROPS}>
         <path d="M8 2 2 12l4 8h12l4-8-6-10z" />
         <path d="M6 20 12 10l6 10" />
+      </svg>
+    ),
+  },
+  {
+    label: 'Voice, in real time',
+    icon: (
+      <svg {...ICON_PROPS}>
+        <rect x="9" y="2" width="6" height="12" rx="3" />
+        <path d="M5 10a7 7 0 0 0 14 0" />
+        <path d="M12 19v3" />
       </svg>
     ),
   },
@@ -468,40 +468,36 @@ export default function OrbShowcase() {
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(56,189,248,0.16),transparent_60%)]" />
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_bottom,rgba(168,85,247,0.12),transparent_55%)]" />
 
-        <div className="relative flex min-h-screen flex-col items-center px-6 py-10 sm:py-14">
+        <div className="relative flex h-screen flex-col items-center overflow-hidden px-6 py-6 sm:py-8">
           <p className="text-sm font-semibold uppercase tracking-[0.6em] text-slate-200">Orby</p>
 
-          <div className="flex w-full flex-1 flex-col items-center justify-center gap-8 py-8 text-center">
-            <div className="scale-[0.7] sm:scale-90">
+          <div className="flex w-full flex-1 flex-col items-center justify-center gap-5 text-center">
+            <div className="w-[min(46vw,220px)] sm:w-[min(38vw,280px)]">
               <OrbVisualizer theme={theme} state={OrbState.Idle} analysis={analysis} />
             </div>
 
-            <div className="max-w-xl space-y-5">
+            <div className="max-w-xl space-y-3">
               <span className="inline-flex items-center gap-1.5 rounded-full border border-cyan-300/30 bg-cyan-500/10 px-3 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.25em] text-cyan-200 shadow-[0_0_20px_rgba(56,189,248,0.15)]">
                 Research Preview
               </span>
-              <h1 className="text-4xl font-semibold tracking-tight text-white sm:text-5xl">
-                Your voice, running Workspace
+              <h1 className="text-3xl font-semibold tracking-tight text-white sm:text-4xl">
+                Hands-free email, by voice
               </h1>
-              <p className="text-base leading-relaxed text-slate-400">
-                Orby is a real-time voice assistant — talk naturally to check your calendar, manage email, and get
-                things done across Google Workspace. No typing, no tapping.
-              </p>
             </div>
 
             <button
               type="button"
               onClick={handleSignIn}
-              className="group relative overflow-hidden rounded-full border border-cyan-300/40 bg-gradient-to-r from-cyan-500/20 via-sky-500/20 to-purple-500/20 px-8 py-4 text-base font-semibold text-white shadow-[0_0_30px_rgba(56,189,248,0.3)] transition hover:border-cyan-200/60 hover:shadow-[0_0_50px_rgba(168,85,247,0.45)]"
+              className="group relative overflow-hidden rounded-full border border-cyan-300/40 bg-gradient-to-r from-cyan-500/20 via-sky-500/20 to-purple-500/20 px-8 py-3.5 text-base font-semibold text-white shadow-[0_0_30px_rgba(56,189,248,0.3)] transition hover:border-cyan-200/60 hover:shadow-[0_0_50px_rgba(168,85,247,0.45)]"
             >
               <span className="relative">Continue with Google</span>
             </button>
 
-            <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+            <div className="flex flex-wrap items-center justify-center gap-2.5">
               {LANDING_CAPABILITIES.map(({ label, icon }) => (
                 <div
                   key={label}
-                  className="flex items-center gap-2 rounded-full border border-slate-200/15 bg-slate-900/60 px-4 py-2 text-xs font-medium text-slate-300 backdrop-blur"
+                  className="flex items-center gap-2 rounded-full border border-slate-200/15 bg-slate-900/60 px-3.5 py-1.5 text-xs font-medium text-slate-300 backdrop-blur"
                 >
                   <span className="text-cyan-300">{icon}</span>
                   {label}
@@ -520,7 +516,7 @@ export default function OrbShowcase() {
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_bottom,rgba(168,85,247,0.08),transparent_55%)]" />
 
       <div className="relative flex min-h-screen flex-col">
-        <header className="flex flex-wrap items-center justify-between gap-3 px-4 sm:px-6 pt-6 sm:pt-8">
+        <header className="flex flex-wrap items-center justify-between gap-2 px-4 sm:gap-3 sm:px-6 pt-3 sm:pt-8">
           <div className="flex flex-wrap items-center gap-2 sm:gap-3">
             <button
               type="button"
@@ -572,9 +568,11 @@ export default function OrbShowcase() {
           </div>
         )}
 
-        <main className="relative flex flex-1 flex-col items-center justify-center px-6 pb-28 pt-16">
+        <main className="relative flex flex-1 flex-col items-center justify-center px-6 pb-20 pt-6 sm:pb-28 sm:pt-16">
           <div className="relative">
-            <OrbVisualizer theme={theme} state={conversationState} analysis={analysis} />
+            <div className="w-[min(58vw,300px)] sm:w-[min(50vw,380px)]">
+              <OrbVisualizer theme={theme} state={conversationState} analysis={analysis} />
+            </div>
 
             <div className="absolute inset-x-0 -bottom-16 flex justify-center">
               <button
