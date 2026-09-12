@@ -34,7 +34,7 @@ import OnboardingWizard from './onboarding/OnboardingWizard';
 import CapabilityChecklist from './onboarding/CapabilityChecklist';
 
 const STORAGE_KEY = 'mcpServers:personalAssistant';
-const DEFAULT_THEME = OrbTheme.Holographic;
+const DEFAULT_THEME = OrbTheme.LiquidGlass;
 
 function aggregateTools(servers: McpServerConfig[]): number {
   return servers.reduce((sum, server) => sum + (server.tools?.length ?? 0), 0);

@@ -5,10 +5,13 @@ import { BubbleOrb } from './themes/BubbleOrb';
 import { HolographicOrb } from './themes/HolographicOrb';
 import { RainbowWaveformOrb } from './themes/RainbowWaveformOrb';
 import { SoapBubbleOrb } from './themes/SoapBubbleOrb';
+import { LiquidGlassOrb } from './themes/LiquidGlassOrb';
 import { OrbVisualizerProps, OrbTheme } from './types';
 
 function OrbVisualizerComponent({ theme, state, analysis }: OrbVisualizerProps) {
   switch (theme) {
+    case OrbTheme.LiquidGlass:
+      return <LiquidGlassOrb analysis={analysis} state={state} />;
     case OrbTheme.Bubble:
       return <BubbleOrb analysis={analysis} state={state} />;
     case OrbTheme.RainbowWaveform:

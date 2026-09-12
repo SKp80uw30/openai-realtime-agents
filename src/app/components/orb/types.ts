@@ -13,6 +13,7 @@ export enum OrbTheme {
   Bubble = 'bubble',
   RainbowWaveform = 'rainbowWaveform',
   Soap = 'soap',
+  LiquidGlass = 'liquidGlass',
 }
 
 export interface OrbAudioAnalysis {
@@ -32,6 +33,7 @@ export interface OrbVisualizerProps {
 }
 
 export const ORB_THEME_ORDER: OrbTheme[] = [
+  OrbTheme.LiquidGlass,
   OrbTheme.Holographic,
   OrbTheme.Bubble,
   OrbTheme.RainbowWaveform,
@@ -43,6 +45,7 @@ export const ORB_THEME_LABELS: Record<OrbTheme, string> = {
   [OrbTheme.Bubble]: 'Bubble',
   [OrbTheme.RainbowWaveform]: 'Rainbow Waveform',
   [OrbTheme.Soap]: 'Soap Bubble',
+  [OrbTheme.LiquidGlass]: 'Liquid Glass',
 };
 
 export const ORB_STATE_LABELS: Record<OrbState, string> = {
