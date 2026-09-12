@@ -14,6 +14,7 @@ import { SessionStatus } from '../types';
 export interface RealtimeSessionCallbacks {
   onConnectionChange?: (status: SessionStatus) => void;
   onAgentHandoff?: (agentName: string) => void;
+  onMcpToolCompleted?: (details: { toolName: string; serverLabel?: string }) => void;
 }
 
 export interface ConnectOptions {
@@ -162,6 +163,13 @@ export function useRealtimeSession(callbacks: RealtimeSessionCallbacks = {}) {
           logServerEvent(mcpResultDetails);
           historyHandlersRef.current.handleMcpCallCompleted(mcpResultDetails);
 
+          if (!mcpResultDetails.error && typeof mcpResultDetails.tool_name === 'string') {
+            callbacks.onMcpToolCompleted?.({
+              toolName: mcpResultDetails.tool_name,
+              serverLabel: mcpResultDetails.server_label,
+            });
+          }
+
           const callId = event.item?.id;
           const pendingCall = callId ? pendingMcpCallsRef.current.get(callId) : undefined;
           const responseId = pendingCall?.responseId ?? event.response_id;
@@ -234,7 +242,7 @@ export function useRealtimeSession(callbacks: RealtimeSessionCallbacks = {}) {
         break;
       }
     }
-  }, [historyHandlersRef, logServerEvent]);
+  }, [historyHandlersRef, logServerEvent, callbacks]);
 
   const codecParamRef = useRef<string>(
     (typeof window !== 'undefined'

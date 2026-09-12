@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useState, useCallback, useEffect } from 'react';
+import React, { useMemo, useState, useCallback, useEffect, useRef } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { useSession, signIn, signOut } from 'next-auth/react';
 
@@ -24,6 +24,7 @@ import {
 } from '@/app/agentConfigs/personalAssistant';
 import type { McpServerConfig, McpServerRequestPayload } from '@/app/types/mcp';
 import { ONBOARDING_STAGE } from '@/app/types/onboarding';
+import { classifyGmailToolCompletion } from '@/app/agentConfigs/emailAgent/toolCompletionClassifier';
 import ToolsOverlay from './ToolsOverlay';
 import { useOnboarding } from './onboarding/useOnboarding';
 import OnboardingWizard from './onboarding/OnboardingWizard';
@@ -99,19 +100,69 @@ export default function OrbShowcase() {
 
   const [sdkAudioElement, setSdkAudioElement] = useState<HTMLAudioElement | undefined>(undefined);
 
+  const isAuthenticated = authStatus === 'authenticated' && Boolean(session?.user);
+  const onboarding = useOnboarding(isAuthenticated);
+  const { completeCapability } = onboarding;
+
+  // sendEvent doesn't exist until useRealtimeSession() below returns, but the
+  // completion callback we pass INTO that same hook call needs to send a
+  // follow-up event once it resolves an async capability check. A ref sidesteps
+  // the circular dependency without making the callback identity unstable.
+  const sendEventRef = useRef<((ev: any) => void) | null>(null);
+
+  const handleMcpToolCompleted = useCallback(
+    ({ toolName }: { toolName: string; serverLabel?: string }) => {
+      const capabilityKey = classifyGmailToolCompletion(toolName);
+      if (!capabilityKey) return;
+
+      void completeCapability(capabilityKey).then((result) => {
+        if (result && !result.alreadyCompleted) {
+          // Matches the established sendSimulatedUserMessage pattern (see
+          // App.tsx) for injecting a hidden directive: conversation.item.create
+          // only supports user/assistant roles here, so a bracketed note on a
+          // 'user' item is how this codebase already nudges the model
+          // out-of-band without it being mistaken for something the user said.
+          sendEventRef.current?.({
+            type: 'conversation.item.create',
+            item: {
+              id: uuidv4().slice(0, 32),
+              type: 'message',
+              role: 'user',
+              content: [
+                {
+                  type: 'input_text',
+                  text: `[SYSTEM NOTE — not spoken by the user: they just used a hands-free email capability for the first time (${capabilityKey}). Briefly and warmly acknowledge this as a small milestone in one short sentence, then continue naturally. Never repeat this acknowledgment again for the same capability.]`,
+                },
+              ],
+            },
+          } as any);
+          sendEventRef.current?.({ type: 'response.create' } as any);
+        }
+      });
+    },
+    [completeCapability],
+  );
+
+  const realtimeCallbacks = useMemo(
+    () => ({ onMcpToolCompleted: handleMcpToolCompleted }),
+    [handleMcpToolCompleted],
+  );
+
   const {
     status: sessionStatus,
     connect,
     disconnect,
     sendEvent,
     mute,
-  } = useRealtimeSession();
+  } = useRealtimeSession(realtimeCallbacks);
+
+  useEffect(() => {
+    sendEventRef.current = sendEvent;
+  }, [sendEvent]);
 
   const conversationState = useOrbConversationState({ sessionStatus });
   const analysis = useOrbAudioAnalysis({ audioElement: sdkAudioElement, enabled: sessionStatus === 'CONNECTED' });
 
-  const isAuthenticated = authStatus === 'authenticated' && Boolean(session?.user);
-  const onboarding = useOnboarding(isAuthenticated);
   const isWorkspaceConnected = activeMcpServers.length > 0;
   const showOnboardingWizard =
     isAuthenticated &&
