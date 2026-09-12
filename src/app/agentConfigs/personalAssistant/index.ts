@@ -1,9 +1,13 @@
 import { RealtimeAgent } from '@openai/agents/realtime';
+import { createEmailAgent } from '@/app/agentConfigs/emailAgent';
+import {
+  ONBOARDING_STAGE,
+  OnboardingCategory,
+  OnboardingContact,
+  OnboardingStage,
+} from '@/app/types/onboarding';
 
-export const personalAssistantAgent = new RealtimeAgent({
-  name: 'personalAssistant',
-  voice: 'sage',
-  instructions: `
+const BASE_INSTRUCTIONS = `
 You are a proactive personal assistant helping users manage their work through voice conversations. You have live access to Google Calendar, Slack, and Gmail via MCP tools and must rely on those tools for all factual answers.
 
 # Core Capabilities
@@ -160,7 +164,19 @@ When appropriate, offer to:
 - Maintain confidentiality of information you see in calendars, messages, and emails
 - Use professional language even in casual conversations
 - Default to private/secure options when ambiguous (e.g., private channels over public)
-`,
+`;
+
+const EMAIL_HANDOFF_NOTE = `
+
+# Handsfree Email
+
+For a deep, hands-free pass through the inbox — triaging by priority, drafting replies, sending, or deleting — hand off to "emailAgent" rather than doing it yourself. Use your own Gmail tools only for quick one-off asks ("did I get an email from Sarah?"). Hand off for anything that sounds like "go through my inbox," "read me my emails," or "reply to that email."
+`;
+
+export const personalAssistantAgent = new RealtimeAgent({
+  name: 'personalAssistant',
+  voice: 'sage',
+  instructions: BASE_INSTRUCTIONS,
   tools: [],
   handoffs: [],
   handoffDescription: 'Personal assistant with Google Calendar, Slack, and Gmail access',
@@ -169,5 +185,44 @@ When appropriate, offer to:
 export const personalAssistantScenario = [personalAssistantAgent];
 
 export const personalAssistantCompanyName = 'Personal Assistant';
+
+export interface CreatePersonalAssistantOptions {
+  stage: OnboardingStage;
+  contacts: OnboardingContact[];
+  categories: OnboardingCategory[];
+}
+
+// Stage-aware entry point for the real Orby app (used by OrbShowcase). Only
+// offers the emailAgent handoff once the user has finished screen-based setup
+// (stage >= Listening) — below that, hands-free email isn't offered as a
+// capability at all. Kept separate from the static exports above so nothing
+// else that imports personalAssistantScenario/personalAssistantAgent
+// (App.tsx, the agentConfigs registry) is affected.
+export function createPersonalAssistantScenario({
+  stage,
+  contacts,
+  categories,
+}: CreatePersonalAssistantOptions): RealtimeAgent[] {
+  const offerEmailAgent = stage >= ONBOARDING_STAGE.Listening;
+
+  const assistant = new RealtimeAgent({
+    name: 'personalAssistant',
+    voice: 'sage',
+    instructions: offerEmailAgent ? BASE_INSTRUCTIONS + EMAIL_HANDOFF_NOTE : BASE_INSTRUCTIONS,
+    tools: [],
+    handoffs: [],
+    handoffDescription: 'Personal assistant with Google Calendar, Slack, and Gmail access',
+  });
+
+  if (!offerEmailAgent) {
+    return [assistant];
+  }
+
+  const email = createEmailAgent({ stage, contacts, categories });
+  (assistant.handoffs as any).push(email);
+  (email.handoffs as any).push(assistant);
+
+  return [assistant, email];
+}
 
 export default personalAssistantScenario;

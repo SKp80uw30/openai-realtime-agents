@@ -19,7 +19,7 @@ import { useTranscript } from '@/app/contexts/TranscriptContext';
 import { useEvent } from '@/app/contexts/EventContext';
 import { createModerationGuardrail } from '@/app/agentConfigs/guardrails';
 import {
-  personalAssistantScenario,
+  createPersonalAssistantScenario,
   personalAssistantCompanyName,
 } from '@/app/agentConfigs/personalAssistant';
 import type { McpServerConfig, McpServerRequestPayload } from '@/app/types/mcp';
@@ -288,11 +288,16 @@ export default function OrbShowcase() {
     }
 
     const guardrail = createModerationGuardrail(personalAssistantCompanyName);
+    const agentScenario = createPersonalAssistantScenario({
+      stage: onboarding.stage ?? ONBOARDING_STAGE.Setup,
+      contacts: onboarding.contacts,
+      categories: onboarding.categories,
+    });
 
     try {
       await connect({
         getEphemeralKey: async () => key,
-        initialAgents: personalAssistantScenario,
+        initialAgents: agentScenario,
         audioElement: sdkAudioElement,
         extraContext: {
           addTranscriptBreadcrumb,
@@ -303,7 +308,17 @@ export default function OrbShowcase() {
     } catch (error) {
       console.error('Unable to start realtime session', error);
     }
-  }, [sessionStatus, fetchEphemeralKey, activeMcpServers, connect, sdkAudioElement, addTranscriptBreadcrumb]);
+  }, [
+    sessionStatus,
+    fetchEphemeralKey,
+    activeMcpServers,
+    connect,
+    sdkAudioElement,
+    addTranscriptBreadcrumb,
+    onboarding.stage,
+    onboarding.contacts,
+    onboarding.categories,
+  ]);
 
   const handleToggleConnection = async () => {
     if (sessionStatus === 'CONNECTED' || sessionStatus === 'CONNECTING') {
