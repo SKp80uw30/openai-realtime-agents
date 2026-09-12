@@ -41,6 +41,14 @@ export function useOrbConversationState({ sessionStatus }: UseOrbConversationSta
     const latestUser = getLatestByRole(messages, 'user');
     const latestAssistant = getLatestByRole(messages, 'assistant');
 
+    // A user speaking over an unfinished assistant response is an interruption.
+    // Check before the latest-user branch, which would otherwise mask it as listening.
+    const userAfterAssistant = latestUser && latestAssistant
+      && (latestUser.createdAtMs ?? 0) > (latestAssistant.createdAtMs ?? 0);
+    if (userAfterAssistant && latestUser.status !== 'DONE' && latestAssistant.status !== 'DONE') {
+      return OrbState.Interrupted;
+    }
+
     if (latestMessage.role === 'user') {
       if (latestMessage.status !== 'DONE') {
         return OrbState.Listening;
@@ -53,10 +61,6 @@ export function useOrbConversationState({ sessionStatus }: UseOrbConversationSta
     }
 
     if (latestAssistant && latestAssistant.status !== 'DONE') {
-      const userAfterAssistant = latestUser && (latestUser.createdAtMs ?? 0) > (latestAssistant.createdAtMs ?? 0);
-      if (userAfterAssistant && latestUser.status !== 'DONE') {
-        return OrbState.Interrupted;
-      }
       return OrbState.Speaking;
     }
 

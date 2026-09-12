@@ -12,7 +12,14 @@ uniform float time;
 uniform float energy;
 uniform float bass;
 uniform float treble;
+uniform float mid;
+uniform float pulse;
+uniform float stateGlow;
+uniform float warp;
+uniform float stateScale;
+uniform float motion;
 uniform vec3 accent;
+uniform vec3 ribbon;
 
 float glow(float distance, float width) {
   return exp(-distance * distance / (width * width));
@@ -20,14 +27,13 @@ float glow(float distance, float width) {
 
 void main() {
   vec2 uv = (gl_FragCoord.xy * 2.0 - resolution) / resolution.x;
-  float breath = sin(time * 1.15) * 0.006;
-  float radius = 0.715 * (1.0 + energy * 0.045 + bass * 0.015 + breath);
-  vec2 p = (uv - vec2(0.0, 0.16 + sin(time * 0.85) * 0.009)) / radius;
+  float radius = 0.715 * (1.0 + motion * (energy * 0.075 + bass * 0.02 + stateScale) + pulse);
+  vec2 p = (uv - vec2(0.0, 0.16 + sin(time * 0.85) * 0.009 * motion)) / radius;
   float r = length(p);
   float edge = 2.0 / resolution.x / radius;
   float sphere = 1.0 - smoothstep(1.0 - edge, 1.0 + edge, r);
-  vec3 blue = vec3(0.005, 0.10, 1.0);
-  vec3 cyan = vec3(0.0, 0.69, 1.0);
+  vec3 blue = mix(vec3(0.005, 0.10, 1.0), ribbon, stateGlow * 0.65);
+  vec3 cyan = ribbon;
   vec3 violet = accent;
   vec3 light = vec3(0.0);
 
@@ -39,7 +45,7 @@ void main() {
     * exp(-pow((uv.y + 0.91) / 0.27, 2.0) * 1.5)
     * (1.0 - smoothstep(-0.76, -0.65, uv.y));
   light += mix(blue, violet, smoothstep(-0.3, 0.3, uv.x))
-    * (pool * 0.85 + ring * 0.24 + reflection * 0.48) * (1.0 + energy * 0.6);
+    * (pool * 0.85 + ring * 0.24 + reflection * 0.48) * (1.0 + energy * 0.8 + stateGlow);
   light += cyan * pool * 0.48;
   // Keep the outer halo restrained: most light lives inside the glass.
   light += mix(blue, violet, smoothstep(-0.2, 0.8, p.x))
@@ -52,18 +58,20 @@ void main() {
     // Refraction compresses the pattern at the silhouette, so it wraps around
     // the sphere instead of looking like a flat animated circle.
     vec2 q = p / (0.73 + z * 0.27);
+    q.x += motion * (warp + mid * 0.035 + energy * 0.045)
+      * sin(q.y * 5.0 + t * 1.4) * z;
     float flow = sin(q.y * 3.7 - 0.35 + t) * 0.27;
     flow += sin(q.y * 6.5 + t * 0.7) * 0.045;
     flow += sin(q.y * 2.2 - t * 0.5) * sin(t * 0.6) * 0.12;
     float ribbonA = q.x + 0.30 - flow;
     float ribbonB = q.x - 0.72 - sin(q.y * 3.5 + t * 0.85) * 0.17;
     float ribbonC = q.x + 0.88 + sin(q.y * 4.0 - t * 0.6) * 0.10;
-    float width = 0.025 + (1.0 - smoothstep(-0.85, 0.5, q.y)) * 0.035;
+    float width = 0.025 + energy * 0.008 + (1.0 - smoothstep(-0.85, 0.5, q.y)) * 0.035;
     vec3 glass = vec3(0.003, 0.004, 0.014);
     glass += vec3(0.017, 0.018, 0.038) * pow(max(z, 0.0), 2.0)
       * smoothstep(-0.15, 0.9, p.y);
     float lower = 1.0 - smoothstep(-0.9, -0.30, p.y);
-    float strength = 0.74 + energy * 0.35;
+    float strength = 0.74 + energy * 0.65 + stateGlow;
     glass += blue * (glow(ribbonA, width * 3.1) * 0.64
       + glow(ribbonB, width * 3.6) * 0.88) * strength;
     glass += cyan * glow(ribbonA, width) * 0.74 * strength;
@@ -102,7 +110,7 @@ void main() {
       * smoothstep(0.60, 0.91, p.y) * (1.0 - smoothstep(0.13, 0.51, p.x));
     glass += vec3(0.75, 0.85, 1.0) * highlight * (0.85 + treble * 0.3);
     float specular = pow(max(dot(normal, normalize(vec3(-0.32, 0.84, 0.42))), 0.0), 95.0);
-    glass += cyan * specular * 0.30;
+    glass += cyan * specular * (0.30 + treble * 0.25);
     light = mix(light, glass, sphere);
   }
   // Transparent outside the sphere: works on the existing showcase background.
