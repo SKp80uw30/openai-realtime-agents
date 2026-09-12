@@ -10,6 +10,7 @@ import { useEvent } from '../contexts/EventContext';
 import { useHandleSessionHistory } from './useHandleSessionHistory';
 import { useTranscript } from '../contexts/TranscriptContext';
 import { SessionStatus } from '../types';
+import { classifyIrreversibleGmailAction, utteranceConfirms } from '../agentConfigs/emailAgent/irreversibleActions';
 
 export interface RealtimeSessionCallbacks {
   onConnectionChange?: (status: SessionStatus) => void;
@@ -52,6 +53,12 @@ export function useRealtimeSession(callbacks: RealtimeSessionCallbacks = {}) {
   const pendingMcpCallsRef = useRef<Map<string, { callId: string; responseId?: string; toolName: string; serverLabel: string; outputIndex?: number; logged: boolean }>>(new Map());
   const mcpCallFollowupTriggeredRef = useRef<Set<string>>(new Set());
   const activeToolCallsRef = useRef<Set<string>>(new Set());
+  // Most recent thing the user said, used to decide whether a pending
+  // irreversible-action approval (send/delete) has genuine, fresh spoken
+  // confirmation. Never cleared automatically — a stale utterance from a
+  // much earlier turn is still the "last thing said" until a new one arrives,
+  // which mirrors how a real confirmation exchange in conversation works.
+  const lastUserUtteranceRef = useRef<string>('');
 
   const handleTransportEvent = useCallback((event: any) => {
     // Handle additional server events that aren't managed by the session
@@ -224,6 +231,9 @@ export function useRealtimeSession(callbacks: RealtimeSessionCallbacks = {}) {
         break;
       }
       case 'conversation.item.input_audio_transcription.completed': {
+        if (typeof event.transcript === 'string' && event.transcript !== '\n') {
+          lastUserUtteranceRef.current = event.transcript;
+        }
         historyHandlersRef.current.handleTranscriptionCompleted(event);
         break;
       }
@@ -340,51 +350,63 @@ export function useRealtimeSession(callbacks: RealtimeSessionCallbacks = {}) {
 
       if (item?.type === 'mcp_approval_request' && typeof item.id === 'string') {
         const approvalId = item.id;
+        const irreversibleAction = classifyIrreversibleGmailAction(item.name);
 
         logServerEvent({
           type: 'agent.mcp_approval.request_received',
           approval_id: approvalId,
           tool_name: item.name,
           server_label: item.server_label,
+          irreversible_action: irreversibleAction,
         });
 
-        if (session) {
-          try {
-            // Send approval response as a conversation item
-            session.transport.sendEvent({
-              type: 'conversation.item.create',
-              item: {
-                type: 'mcp_approval_response',
-                approval_request_id: approvalId,
-                approve: true,
-              },
-            } as any);
-
-            logServerEvent({
-              type: 'agent.mcp_approval.auto_approved',
-              approval_id: approvalId,
-            });
-
-            // Trigger a new response to execute the approved call
-            session.transport.sendEvent({
-              type: 'response.create',
-            } as any);
-
-            logServerEvent({
-              type: 'agent.mcp_approval.response_triggered',
-              approval_id: approvalId,
-            });
-          } catch (error: any) {
-            logServerEvent({
-              type: 'agent.mcp_approval.error',
-              approval_id: approvalId,
-              error: error?.message ?? error,
-            });
-          }
-        } else {
+        if (!session) {
           logServerEvent({
             type: 'agent.mcp_approval.no_session',
             approval_id: approvalId,
+          });
+          return;
+        }
+
+        // Non-irreversible tools shouldn't normally reach approval at all
+        // (require_approval is only configured to gate send/delete — see
+        // OrbShowcase.tsx), but if one somehow does, fail open the same way
+        // this always used to behave rather than silently stalling it.
+        const approve = irreversibleAction === null || utteranceConfirms(irreversibleAction, lastUserUtteranceRef.current);
+
+        try {
+          session.transport.sendEvent({
+            type: 'conversation.item.create',
+            item: {
+              type: 'mcp_approval_response',
+              approval_request_id: approvalId,
+              approve,
+            },
+          } as any);
+
+          logServerEvent({
+            type: approve ? 'agent.mcp_approval.confirmed' : 'agent.mcp_approval.denied_no_confirmation',
+            approval_id: approvalId,
+            irreversible_action: irreversibleAction,
+            last_user_utterance: lastUserUtteranceRef.current,
+          });
+
+          // Trigger a new response either way — approved so the call can
+          // execute and be narrated, or denied so the model can ask again
+          // rather than the conversation silently stalling.
+          session.transport.sendEvent({
+            type: 'response.create',
+          } as any);
+
+          logServerEvent({
+            type: 'agent.mcp_approval.response_triggered',
+            approval_id: approvalId,
+          });
+        } catch (error: any) {
+          logServerEvent({
+            type: 'agent.mcp_approval.error',
+            approval_id: approvalId,
+            error: error?.message ?? error,
           });
         }
       }

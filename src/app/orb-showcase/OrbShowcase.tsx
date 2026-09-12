@@ -22,9 +22,10 @@ import {
   createPersonalAssistantScenario,
   personalAssistantCompanyName,
 } from '@/app/agentConfigs/personalAssistant';
-import type { McpServerConfig, McpServerRequestPayload } from '@/app/types/mcp';
+import type { McpRequireApproval, McpServerConfig, McpServerRequestPayload } from '@/app/types/mcp';
 import { ONBOARDING_STAGE } from '@/app/types/onboarding';
 import { classifyGmailToolCompletion } from '@/app/agentConfigs/emailAgent/toolCompletionClassifier';
+import { classifyIrreversibleGmailAction } from '@/app/agentConfigs/emailAgent/irreversibleActions';
 import ToolsOverlay from './ToolsOverlay';
 import { useOnboarding } from './onboarding/useOnboarding';
 import OnboardingWizard from './onboarding/OnboardingWizard';
@@ -35,6 +36,29 @@ const DEFAULT_THEME = OrbTheme.Holographic;
 
 function aggregateTools(servers: McpServerConfig[]): number {
   return servers.reduce((sum, server) => sum + (server.tools?.length ?? 0), 0);
+}
+
+// Gates send/delete Gmail tool calls behind explicit approval (see
+// useRealtimeSession.ts's mcp_approval_request handling), while everything
+// else on the server keeps auto-executing as before. Returns undefined
+// (server-side default 'never' — no gating) if this server's tool list isn't
+// known yet or contains nothing irreversible to gate.
+function computeRequireApproval(server: McpServerConfig): McpRequireApproval | undefined {
+  const toolNames = (server.tools ?? []).map((tool) => tool.name);
+  if (toolNames.length === 0) return undefined;
+
+  const always: string[] = [];
+  const never: string[] = [];
+  for (const name of toolNames) {
+    if (classifyIrreversibleGmailAction(name)) {
+      always.push(name);
+    } else {
+      never.push(name);
+    }
+  }
+
+  if (always.length === 0) return undefined;
+  return { always: { tool_names: always }, never: { tool_names: never } };
 }
 
 const ICON_PROPS = {
@@ -290,6 +314,7 @@ export default function OrbShowcase() {
         allowed_tools: server.allowedTools && server.allowedTools.length
           ? { tool_names: server.allowedTools }
           : undefined,
+        require_approval: computeRequireApproval(server),
       })),
     };
 

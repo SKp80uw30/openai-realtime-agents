@@ -22,7 +22,10 @@ async function createRealtimeSession(body: SessionRequestBody = {}) {
           server_url: server.server_url,
           headers: server.headers,
           allowed_tools: server.allowed_tools,
-          require_approval: 'never' as const,  // Auto-execute MCP calls without approval (we trust this server)
+          // Defaults to 'never' (pre-existing behavior: auto-execute, we trust
+          // this server) unless the client explicitly requests approval gating
+          // for specific tools — see OrbShowcase.tsx's irreversible-action gate.
+          require_approval: server.require_approval ?? ('never' as const),
         }))
       : undefined;
 

@@ -51,9 +51,15 @@ export interface McpServerConfig {
   errorMessage?: string;
 }
 
+export type McpRequireApproval =
+  | 'always'
+  | 'never'
+  | { never?: { tool_names: string[] }; always?: { tool_names: string[] } };
+
 export interface McpServerRequestPayload {
   label: string;
   server_url: string;
   headers?: Record<string, string>;
   allowed_tools?: { tool_names: string[] } | string[];
+  require_approval?: McpRequireApproval;
 }
