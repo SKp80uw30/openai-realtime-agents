@@ -58,7 +58,7 @@ function describePermissions(stage: OnboardingStage): string {
   return lines.join('\n');
 }
 
-const STAGE_LABELS: Record<OnboardingStage, string> = {
+export const STAGE_LABELS: Record<OnboardingStage, string> = {
   [ONBOARDING_STAGE.Setup]: 'Setup',
   [ONBOARDING_STAGE.Priorities]: 'Priorities',
   [ONBOARDING_STAGE.Listening]: 'Listening',

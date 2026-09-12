@@ -24,8 +24,10 @@ import {
 } from '@/app/agentConfigs/personalAssistant';
 import type { McpRequireApproval, McpServerConfig, McpServerRequestPayload } from '@/app/types/mcp';
 import { ONBOARDING_STAGE } from '@/app/types/onboarding';
+import type { OnboardingStage } from '@/app/types/onboarding';
 import { classifyGmailToolCompletion } from '@/app/agentConfigs/emailAgent/toolCompletionClassifier';
 import { classifyIrreversibleGmailAction } from '@/app/agentConfigs/emailAgent/irreversibleActions';
+import { STAGE_LABELS } from '@/app/agentConfigs/emailAgent';
 import ToolsOverlay from './ToolsOverlay';
 import { useOnboarding } from './onboarding/useOnboarding';
 import OnboardingWizard from './onboarding/OnboardingWizard';
@@ -134,37 +136,60 @@ export default function OrbShowcase() {
   // the circular dependency without making the callback identity unstable.
   const sendEventRef = useRef<((ev: any) => void) | null>(null);
 
+  // Matches the established sendSimulatedUserMessage pattern (see App.tsx)
+  // for injecting a hidden directive: conversation.item.create only supports
+  // user/assistant roles here, so a bracketed note on a 'user' item is how
+  // this codebase already nudges the model out-of-band without it being
+  // mistaken for something the user said.
+  const sendHiddenNudge = useCallback((text: string) => {
+    sendEventRef.current?.({
+      type: 'conversation.item.create',
+      item: {
+        id: uuidv4().slice(0, 32),
+        type: 'message',
+        role: 'user',
+        content: [{ type: 'input_text', text: `[SYSTEM NOTE — not spoken by the user: ${text}]` }],
+      },
+    } as any);
+    sendEventRef.current?.({ type: 'response.create' } as any);
+  }, []);
+
+  // Optional screen-side echo of a graduation moment — only shown if the
+  // user happens to be looking (e.g. post-drive); the spoken nudge above is
+  // the version that matters mid-drive. Self-clears after a few seconds.
+  const [graduationBannerStage, setGraduationBannerStage] = useState<number | null>(null);
+  useEffect(() => {
+    if (graduationBannerStage === null) return;
+    const timeout = setTimeout(() => setGraduationBannerStage(null), 8000);
+    return () => clearTimeout(timeout);
+  }, [graduationBannerStage]);
+
   const handleMcpToolCompleted = useCallback(
     ({ toolName }: { toolName: string; serverLabel?: string }) => {
       const capabilityKey = classifyGmailToolCompletion(toolName);
       if (!capabilityKey) return;
 
       void completeCapability(capabilityKey).then((result) => {
-        if (result && !result.alreadyCompleted) {
-          // Matches the established sendSimulatedUserMessage pattern (see
-          // App.tsx) for injecting a hidden directive: conversation.item.create
-          // only supports user/assistant roles here, so a bracketed note on a
-          // 'user' item is how this codebase already nudges the model
-          // out-of-band without it being mistaken for something the user said.
-          sendEventRef.current?.({
-            type: 'conversation.item.create',
-            item: {
-              id: uuidv4().slice(0, 32),
-              type: 'message',
-              role: 'user',
-              content: [
-                {
-                  type: 'input_text',
-                  text: `[SYSTEM NOTE — not spoken by the user: they just used a hands-free email capability for the first time (${capabilityKey}). Briefly and warmly acknowledge this as a small milestone in one short sentence, then continue naturally. Never repeat this acknowledgment again for the same capability.]`,
-                },
-              ],
-            },
-          } as any);
-          sendEventRef.current?.({ type: 'response.create' } as any);
+        if (!result) return;
+
+        if (result.stageAdvanced) {
+          // The bigger moment — a graduation to a new trust-ladder stage —
+          // takes precedence over the routine first-use acknowledgment below.
+          setGraduationBannerStage(result.stage);
+          sendHiddenNudge(
+            `the user just unlocked a new hands-free email stage (now stage ${result.stage}) by building up real usage. This is a bigger deal than a routine first-use — acknowledge it warmly as a milestone in your own words, mention that new things are now possible, then continue naturally. Never repeat this for the same stage transition again.`,
+          );
+          return;
+        }
+
+        if (!result.alreadyCompleted) {
+          sendHiddenNudge(
+            `they just used a hands-free email capability for the first time (${capabilityKey}). Briefly and warmly acknowledge this as a small milestone in one short sentence, then continue naturally. Never repeat this acknowledgment again for the same capability.`,
+          );
         }
       });
     },
-    [completeCapability],
+    [completeCapability, sendHiddenNudge],
   );
 
   const realtimeCallbacks = useMemo(
@@ -298,6 +323,24 @@ export default function OrbShowcase() {
       }
     }
   }, [sessionStatus, mute, sendEvent]);
+
+  // Infrequent, session-start-only streak callout — never mid-triage. Fires
+  // at most once per connection (guarded by the ref, reset on disconnect),
+  // and only when there's an actual multi-day streak worth mentioning.
+  const streakAnnouncedRef = useRef(false);
+  useEffect(() => {
+    if (sessionStatus === 'CONNECTED' && !streakAnnouncedRef.current) {
+      streakAnnouncedRef.current = true;
+      if (onboarding.streakDays >= 2) {
+        sendHiddenNudge(
+          `the user has now used hands-free email ${onboarding.streakDays} days in a row. Mention this briefly and warmly once, right at the start of this conversation, then move on to helping them — never mention it again later in this same conversation.`,
+        );
+      }
+    }
+    if (sessionStatus === 'DISCONNECTED') {
+      streakAnnouncedRef.current = false;
+    }
+  }, [sessionStatus, onboarding.streakDays, sendHiddenNudge]);
 
   const fetchEphemeralKey = useCallback(async (servers: McpServerConfig[], model: string = 'gpt-realtime-mini') => {
     const eligibleServers = servers.filter((server) => server.status !== 'error');
@@ -512,6 +555,22 @@ export default function OrbShowcase() {
             </button>
           </div>
         </header>
+
+        {graduationBannerStage !== null && (
+          <div className="mx-4 mt-4 flex items-center justify-between rounded-xl border border-cyan-400/30 bg-gradient-to-r from-cyan-500/10 via-sky-500/10 to-purple-500/10 px-4 py-3 text-sm text-cyan-100 sm:mx-6">
+            <span>
+              You&apos;ve unlocked <strong>{STAGE_LABELS[graduationBannerStage as OnboardingStage]}</strong> — new
+              things are possible now hands-free.
+            </span>
+            <button
+              type="button"
+              onClick={() => setGraduationBannerStage(null)}
+              className="ml-3 shrink-0 text-xs text-cyan-200/70 hover:text-cyan-100"
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
 
         <main className="relative flex flex-1 flex-col items-center justify-center px-6 pb-28 pt-16">
           <div className="relative">

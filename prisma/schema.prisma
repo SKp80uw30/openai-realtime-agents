@@ -77,6 +77,11 @@ model OnboardingProgress {
   userId    String   @unique
   // 0 Setup / 1 Priorities / 2 Listening / 3 Responding / 4 Acting
   stage     Int      @default(0)
+  // Consecutive-day usage streak, for the infrequent session-start-only
+  // verbal callout. lastActiveDate is a plain calendar date (UTC midnight)
+  // so "today vs. yesterday vs. a gap" comparisons don't need timezone math.
+  streakDays     Int       @default(0)
+  lastActiveDate DateTime?
   updatedAt DateTime @updatedAt
 }
 
@@ -130,6 +135,11 @@ model UserCapabilityProgress {
   capability       Capability @relation(fields: [capabilityId], references: [id], onDelete: Cascade)
   capabilityId     String
   firstCompletedAt DateTime   @default(now())
+  // Incremented on every genuine use (including the first) — the checklist
+  // itself only cares about firstCompletedAt, but stage-advancement needs to
+  // know "how many times since," not just "at least once."
+  useCount         Int        @default(1)
+  lastUsedAt       DateTime   @default(now())
 
   @@unique([userId, capabilityId])
 }

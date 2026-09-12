@@ -11,6 +11,7 @@ import type {
 interface UseOnboardingResult {
   loading: boolean;
   stage: OnboardingStage | null;
+  streakDays: number;
   contacts: OnboardingContact[];
   categories: OnboardingCategory[];
   capabilities: CapabilityGroupStatus | null;
@@ -19,7 +20,9 @@ interface UseOnboardingResult {
   removeContact: (id: string) => Promise<void>;
   addCategory: (category: { name: string; keywords: string[]; priority: number }) => Promise<void>;
   removeCategory: (id: string) => Promise<void>;
-  completeCapability: (key: string) => Promise<{ alreadyCompleted: boolean } | null>;
+  completeCapability: (
+    key: string,
+  ) => Promise<{ alreadyCompleted: boolean; stageAdvanced: boolean; stage: OnboardingStage } | null>;
   refreshCapabilities: () => Promise<void>;
 }
 
@@ -40,6 +43,7 @@ async function getJson<T>(url: string, init?: RequestInit): Promise<T | null> {
 export function useOnboarding(enabled: boolean): UseOnboardingResult {
   const [loading, setLoading] = useState(true);
   const [stage, setStageState] = useState<OnboardingStage | null>(null);
+  const [streakDays, setStreakDays] = useState(0);
   const [contacts, setContacts] = useState<OnboardingContact[]>([]);
   const [categories, setCategories] = useState<OnboardingCategory[]>([]);
   const [capabilities, setCapabilities] = useState<CapabilityGroupStatus | null>(null);
@@ -56,14 +60,17 @@ export function useOnboarding(enabled: boolean): UseOnboardingResult {
     (async () => {
       setLoading(true);
       const [progress, contactsData, categoriesData, capabilitiesData] = await Promise.all([
-        getJson<{ stage: OnboardingStage }>('/api/onboarding/progress'),
+        getJson<{ stage: OnboardingStage; streakDays: number }>('/api/onboarding/progress'),
         getJson<{ contacts: OnboardingContact[] }>('/api/onboarding/contacts'),
         getJson<{ categories: OnboardingCategory[] }>('/api/onboarding/categories'),
         getJson<CapabilityGroupStatus>('/api/capabilities'),
       ]);
 
       if (cancelled) return;
-      if (progress) setStageState(progress.stage);
+      if (progress) {
+        setStageState(progress.stage);
+        setStreakDays(progress.streakDays);
+      }
       if (contactsData) setContacts(contactsData.contacts);
       if (categoriesData) setCategories(categoriesData.categories);
       if (capabilitiesData) setCapabilities(capabilitiesData);
@@ -125,18 +132,22 @@ export function useOnboarding(enabled: boolean): UseOnboardingResult {
   }, []);
 
   const completeCapability = useCallback(async (key: string) => {
-    const data = await getJson<{ key: string; alreadyCompleted: boolean }>(
-      `/api/capabilities/${encodeURIComponent(key)}/complete`,
-      { method: 'POST' },
-    );
+    const data = await getJson<{
+      key: string;
+      alreadyCompleted: boolean;
+      stage: OnboardingStage;
+      stageAdvanced: boolean;
+    }>(`/api/capabilities/${encodeURIComponent(key)}/complete`, { method: 'POST' });
     if (!data) return null;
     await refreshCapabilities();
-    return { alreadyCompleted: data.alreadyCompleted };
+    if (data.stageAdvanced) setStageState(data.stage);
+    return { alreadyCompleted: data.alreadyCompleted, stageAdvanced: data.stageAdvanced, stage: data.stage };
   }, [refreshCapabilities]);
 
   return {
     loading,
     stage,
+    streakDays,
     contacts,
     categories,
     capabilities,
