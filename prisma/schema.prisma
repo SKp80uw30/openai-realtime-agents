@@ -20,6 +20,7 @@ model User {
   contacts             Contact[]
   emailCategories      EmailCategory[]
   capabilityProgress   UserCapabilityProgress[]
+  practiceDays         CapabilityPracticeDay[]
   createdAt     DateTime             @default(now())
   updatedAt     DateTime             @updatedAt
 }
@@ -115,6 +116,28 @@ model CapabilityGroup {
   key          String       @unique
   label        String
   capabilities Capability[]
+  practiceDays CapabilityPracticeDay[]
+}
+
+// One row per (user, group, calendar day) on which the user actually used a
+// capability in that group. Distinct *days* — not total uses — is what the
+// practice tier ladder is built on, because habit formation comes from
+// repetition spread over time, and a raw use-count can be run up in a single
+// sitting without changing how anyone works. Keeping the days themselves
+// (rather than a denormalised counter) means streaks stay recomputable and a
+// calendar/heatmap view is possible later without a backfill.
+model CapabilityPracticeDay {
+  id      String          @id @default(cuid())
+  user    User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId  String
+  group   CapabilityGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  groupId String
+  // UTC midnight, matching toUtcDateOnly() so day comparisons need no tz math.
+  day     DateTime        @db.Date
+  uses    Int             @default(1)
+
+  @@unique([userId, groupId, day])
+  @@index([userId, groupId, day])
 }
 
 model Capability {

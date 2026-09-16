@@ -20,9 +20,14 @@ interface UseOnboardingResult {
   removeContact: (id: string) => Promise<void>;
   addCategory: (category: { name: string; keywords: string[]; priority: number }) => Promise<void>;
   removeCategory: (id: string) => Promise<void>;
-  completeCapability: (
-    key: string,
-  ) => Promise<{ alreadyCompleted: boolean; stageAdvanced: boolean; stage: OnboardingStage } | null>;
+  completeCapability: (key: string) => Promise<{
+    alreadyCompleted: boolean;
+    stageAdvanced: boolean;
+    stage: OnboardingStage;
+    /** True only when this use crossed a practice-tier threshold. */
+    tierAdvanced: boolean;
+    tier: { key: string; label: string; blurb: string } | null;
+  } | null>;
   refreshCapabilities: () => Promise<void>;
 }
 
@@ -137,11 +142,19 @@ export function useOnboarding(enabled: boolean): UseOnboardingResult {
       alreadyCompleted: boolean;
       stage: OnboardingStage;
       stageAdvanced: boolean;
+      tierAdvanced: boolean;
+      tier: { key: string; label: string; blurb: string };
     }>(`/api/capabilities/${encodeURIComponent(key)}/complete`, { method: 'POST' });
     if (!data) return null;
     await refreshCapabilities();
     if (data.stageAdvanced) setStageState(data.stage);
-    return { alreadyCompleted: data.alreadyCompleted, stageAdvanced: data.stageAdvanced, stage: data.stage };
+    return {
+      alreadyCompleted: data.alreadyCompleted,
+      stageAdvanced: data.stageAdvanced,
+      stage: data.stage,
+      tierAdvanced: Boolean(data.tierAdvanced),
+      tier: data.tier ?? null,
+    };
   }, [refreshCapabilities]);
 
   return {

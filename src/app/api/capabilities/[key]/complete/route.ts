@@ -3,6 +3,8 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/lib/auth";
 import prisma from "@/app/lib/prisma";
 import { computeAdvancedStage } from "@/app/agentConfigs/emailAgent/stageAdvancement";
+import { toUtcDateOnly } from "@/app/agentConfigs/emailAgent/streak";
+import { computePracticeSummary } from "@/app/lib/practice";
 import { OnboardingStage } from "@/app/types/onboarding";
 
 export async function POST(_request: Request, { params }: { params: Promise<{ key: string }> }) {
@@ -35,6 +37,23 @@ export async function POST(_request: Request, { params }: { params: Promise<{ ke
         data: { userId, capabilityId: capability.id },
       });
 
+  // Record that this group was used hands-free today. One row per calendar
+  // day: the practice tier ladder counts distinct days, so twenty uses in one
+  // sitting advance it exactly as far as one does — which is the point.
+  const today = toUtcDateOnly(new Date());
+  const existingDay = await prisma.capabilityPracticeDay.findUnique({
+    where: {
+      userId_groupId_day: { userId, groupId: capability.groupId, day: today },
+    },
+  });
+  await prisma.capabilityPracticeDay.upsert({
+    where: {
+      userId_groupId_day: { userId, groupId: capability.groupId, day: today },
+    },
+    update: { uses: { increment: 1 } },
+    create: { userId, groupId: capability.groupId, day: today },
+  });
+
   // Stage-advancement check: only relevant capability groups need this, but
   // it's cheap enough to just always check — pull every capability use-count
   // for this user's group and see if the current stage's criteria are met.
@@ -64,6 +83,31 @@ export async function POST(_request: Request, { params }: { params: Promise<{ ke
     });
   }
 
+  // Practice tier, before and after this call, so the client knows whether to
+  // celebrate a tier-up. "Before" is reconstructed by subtracting exactly what
+  // this call added: the step, if it was the first time, and today, if today
+  // wasn't already an active day.
+  const totalSteps = await prisma.capability.count({ where: { groupId: capability.groupId } });
+  const practiceDayRows = await prisma.capabilityPracticeDay.findMany({
+    where: { userId, groupId: capability.groupId },
+    select: { day: true },
+    orderBy: { day: "asc" },
+  });
+  const practiceDays = practiceDayRows.map((row) => row.day);
+  const stepsCompleted = groupProgress.length;
+  const now = new Date();
+
+  const practiceAfter = computePracticeSummary({ stepsCompleted, totalSteps, practiceDays, now });
+  const practiceBefore = computePracticeSummary({
+    stepsCompleted: existing ? stepsCompleted : stepsCompleted - 1,
+    totalSteps,
+    practiceDays: existingDay
+      ? practiceDays
+      : practiceDays.filter((day) => day.getTime() !== today.getTime()),
+    now,
+  });
+  const tierAdvanced = practiceAfter.tier.key !== practiceBefore.tier.key;
+
   return NextResponse.json({
     key: capability.key,
     completed: true,
@@ -72,5 +116,9 @@ export async function POST(_request: Request, { params }: { params: Promise<{ ke
     alreadyCompleted: Boolean(existing),
     stage: nextStage,
     stageAdvanced,
+    tier: { key: practiceAfter.tier.key, label: practiceAfter.tier.label, blurb: practiceAfter.tier.blurb },
+    tierAdvanced,
+    activeDays: practiceAfter.activeDays,
+    currentStreak: practiceAfter.currentStreak,
   });
 }
