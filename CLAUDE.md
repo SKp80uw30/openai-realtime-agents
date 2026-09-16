@@ -227,6 +227,27 @@ the header widget.
 
 ## Common Gotchas
 
+### Never run `npm run build` while `npm run dev` is running
+They share one `.next/` directory. A build replaces the dev server's chunks underneath it, and the dev
+server then serves module references that no longer exist (`Cannot find module './996.js'`), or 404s on
+routes that exist. Pages still return 200, but hydration dies — so client-driven UI like the canvas orb
+silently stops painting while the server-rendered markup around it looks fine. Stop dev first:
+`pkill -f "next dev" && npm run build && npm run dev`. To recover: `rm -rf .next` and restart dev.
+Production build artefacts (`export-marker.json`, `prerender-manifest.json`, `*.nft.json`) sitting in
+`.next/` while dev is running is the tell. This caused a P1 on 2026-09-12 — see
+[`docs/orb-layout.md`](docs/orb-layout.md).
+
+### Never size the orb with a `vh`/`dvh` term
+The orb's budget is the viewport **minus the header and the dock**, not a fraction of the viewport. A
+`dvh` cap is a hard-coded guess about the dock's height that goes stale the instant anyone changes the
+dock — and when it does, the orb overflows its grid row off the top of the screen and under the dock
+rather than shrinking, with no error and no scrollbar. It's sized by `aspect-ratio` + `h-full` +
+`min-w-0 w-auto` against the row instead, so it adapts on its own. **Read
+[`docs/orb-layout.md`](docs/orb-layout.md) before changing `OrbShowcase`'s orb sizing or anything in the
+action dock (`MicButton`, `CapabilityChecklist`)** — it documents the full failure, why `min-w-0 w-auto`
+is load-bearing, the `--orb-size`/`--orb-diameter` alignment contract, and the viewport matrix to re-run.
+Verify at a short window (1280×540), not just a phone — that's where this class of bug appears first.
+
 ### NextAuth with JWT + Prisma Adapter
 When using `session: { strategy: 'jwt' }` with `PrismaAdapter`, you must implement a `jwt` callback to capture user data during sign-in. Without it, the JWT token won't be populated and users will be stuck in an auth loop.
 
@@ -277,7 +298,7 @@ Guardrail configuration is in `src/app/agentConfigs/guardrails.ts`.
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **openai-realtime-agents** (1581 symbols, 2062 relationships, 29 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **openai-realtime-agents** (1599 symbols, 2082 relationships, 29 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
 

@@ -82,7 +82,6 @@ export function RainbowWaveformOrb({ analysis, state, size = BASE_SIZE }: Props)
       className={styles.orbContainer}
       style={{
         width: size,
-        height: size,
         transform: `scale(${1 + analysis.volume * 0.06})`,
       }}
     >

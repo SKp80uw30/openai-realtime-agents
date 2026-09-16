@@ -33,7 +33,6 @@ export function HolographicOrb({ analysis, state, size = BASE_SIZE }: Props) {
       className={`${styles.orbContainer} ${styles.floating}`}
       style={{
         width: reactiveSize,
-        height: reactiveSize,
         transform: `scale(${1 + analysis.volume * 0.04})`,
       }}
     >

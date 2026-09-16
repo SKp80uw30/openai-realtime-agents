@@ -30,6 +30,7 @@ export interface OrbVisualizerProps {
   theme: OrbTheme;
   state: OrbState;
   analysis: OrbAudioAnalysis;
+  size?: number;
 }
 
 export const ORB_THEME_ORDER: OrbTheme[] = [

@@ -4,7 +4,13 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { OrbAudioAnalysis } from '../types';
 
 type UseOrbAudioAnalysisOptions = {
+  // Either source works: `audioElement` reads whatever MediaStream is currently
+  // attached to it (used for the assistant's remote playback element, which may
+  // not have a stream yet when this hook mounts). `stream` is used directly and
+  // immediately (used for the user's own mic track, which has no playable
+  // element — we never want to loop the user's voice back through a speaker).
   audioElement?: HTMLAudioElement | null;
+  stream?: MediaStream | null;
   enabled: boolean;
 };
 
@@ -23,7 +29,7 @@ function normalise(value: number, max = 1): number {
   return Math.max(0, Math.min(1, value / max));
 }
 
-export function useOrbAudioAnalysis({ audioElement, enabled }: UseOrbAudioAnalysisOptions): OrbAudioAnalysis {
+export function useOrbAudioAnalysis({ audioElement, stream, enabled }: UseOrbAudioAnalysisOptions): OrbAudioAnalysis {
   const [analysis, setAnalysis] = useState<OrbAudioAnalysis>(DEFAULT_ANALYSIS);
   const rafRef = useRef<number | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
@@ -35,7 +41,7 @@ export function useOrbAudioAnalysis({ audioElement, enabled }: UseOrbAudioAnalys
   const frequencyBuffer = useMemo(() => new Uint8Array(1024), []);
 
   useEffect(() => {
-    if (!enabled || !audioElement) {
+    if (!enabled || !(audioElement || stream)) {
       setAnalysis(DEFAULT_ANALYSIS);
       return () => {};
     }
@@ -49,7 +55,7 @@ export function useOrbAudioAnalysis({ audioElement, enabled }: UseOrbAudioAnalys
     };
 
     const attachStream = () => {
-      const mediaStream = audioElement.srcObject as MediaStream | null;
+      const mediaStream = stream ?? (audioElement?.srcObject as MediaStream | null);
       if (!mediaStream || mediaStream.getAudioTracks().length === 0) {
         return false;
       }
@@ -128,6 +134,10 @@ export function useOrbAudioAnalysis({ audioElement, enabled }: UseOrbAudioAnalys
 
     const tryAttach = () => {
       if (attachStream()) return () => {};
+      // A directly-provided stream is either usable now or not at all — the
+      // 'playing'/'loadeddata' wait-and-retry only makes sense for an
+      // <audio> element whose srcObject may attach after this effect runs.
+      if (!audioElement) return () => {};
       const listener = () => {
         attachStream();
       };
@@ -161,7 +171,7 @@ export function useOrbAudioAnalysis({ audioElement, enabled }: UseOrbAudioAnalys
         audioContextRef.current = null;
       }
     };
-  }, [audioElement, enabled, frequencyBuffer, waveformBuffer]);
+  }, [audioElement, stream, enabled, frequencyBuffer, waveformBuffer]);
 
   return analysis;
 }

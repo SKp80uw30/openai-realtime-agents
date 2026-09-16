@@ -32,7 +32,6 @@ export function SoapBubbleOrb({ analysis, state, size = BASE_SIZE }: Props) {
       className={styles.orbContainer}
       style={{
         width: reactiveSize,
-        height: reactiveSize,
         transform: `scale(${1 + analysis.volume * 0.04})`,
       }}
     >

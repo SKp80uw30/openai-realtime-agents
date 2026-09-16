@@ -12,6 +12,9 @@ export default {
         background: "var(--background)",
         foreground: "var(--foreground)",
       },
+      fontFamily: {
+        orby: ["var(--font-orby)", "system-ui", "sans-serif"],
+      },
     },
   },
   plugins: [],

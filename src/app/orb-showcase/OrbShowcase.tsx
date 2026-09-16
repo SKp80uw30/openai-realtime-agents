@@ -29,12 +29,17 @@ import { classifyGmailToolCompletion } from '@/app/agentConfigs/emailAgent/toolC
 import { classifyIrreversibleGmailAction } from '@/app/agentConfigs/emailAgent/irreversibleActions';
 import { STAGE_LABELS } from '@/app/agentConfigs/emailAgent';
 import ToolsOverlay from './ToolsOverlay';
+import MicButton from './MicButton';
+import SettingsMenu from './SettingsMenu';
 import { useOnboarding } from './onboarding/useOnboarding';
 import OnboardingWizard from './onboarding/OnboardingWizard';
 import CapabilityChecklist from './onboarding/CapabilityChecklist';
 
 const STORAGE_KEY = 'mcpServers:personalAssistant';
 const DEFAULT_THEME = OrbTheme.LiquidGlass;
+// Liquid Glass is the only theme we want users to see for now — the other
+// themes stay in the codebase, but the switcher that exposes them is hidden.
+const SHOW_THEME_SWITCHER = false;
 
 function aggregateTools(servers: McpServerConfig[]): number {
   return servers.reduce((sum, server) => sum + (server.tools?.length ?? 0), 0);
@@ -193,6 +198,7 @@ export default function OrbShowcase() {
     disconnect,
     sendEvent,
     mute,
+    getLocalMediaStream,
   } = useRealtimeSession(realtimeCallbacks);
 
   useEffect(() => {
@@ -200,7 +206,26 @@ export default function OrbShowcase() {
   }, [sendEvent]);
 
   const conversationState = useOrbConversationState({ sessionStatus });
-  const analysis = useOrbAudioAnalysis({ audioElement: sdkAudioElement, enabled: sessionStatus === 'CONNECTED' });
+
+  // The mic track only exists once the WebRTC connection finishes negotiating,
+  // so it's picked up right as the session goes CONNECTED rather than at mount.
+  const [micStream, setMicStream] = useState<MediaStream | null>(null);
+  useEffect(() => {
+    if (sessionStatus === 'CONNECTED') {
+      setMicStream(getLocalMediaStream());
+    } else {
+      setMicStream(null);
+    }
+  }, [sessionStatus, getLocalMediaStream]);
+
+  // Two independent analysers: the assistant's playback element, and the
+  // user's own mic track. Which one drives the orb's audio-reactive motion
+  // switches with who is actually talking, so the orb stays visually alive
+  // during the user's turn instead of only reacting to the assistant.
+  const remoteAnalysis = useOrbAudioAnalysis({ audioElement: sdkAudioElement, enabled: sessionStatus === 'CONNECTED' });
+  const localAnalysis = useOrbAudioAnalysis({ stream: micStream, enabled: sessionStatus === 'CONNECTED' && Boolean(micStream) });
+  const isUserTurn = conversationState === OrbState.Listening || conversationState === OrbState.Interrupted;
+  const analysis = isUserTurn ? localAnalysis : remoteAnalysis;
 
   const isWorkspaceConnected = activeMcpServers.length > 0;
   const showOnboardingWizard =
@@ -217,26 +242,15 @@ export default function OrbShowcase() {
       ? `${totalTools} tool${totalTools === 1 ? '' : 's'}`
       : 'No tools connected';
 
-  const sessionIndicator = useMemo(() => {
-    const base: { label: string; color: string } = {
-      label: 'Standby',
-      color: 'bg-slate-700/80 text-slate-100 border-slate-500/60',
-    };
-
-    if (sessionStatus === 'CONNECTING') {
-      return {
-        label: 'Connecting…',
-        color: 'bg-amber-500/20 text-amber-200 border-amber-400/40',
-      };
-    }
-    if (sessionStatus === 'CONNECTED') {
-      return {
-        label: 'Live',
-        color: 'bg-emerald-500/20 text-emerald-200 border-emerald-400/40',
-      };
-    }
-    return base;
-  }, [sessionStatus]);
+  // One caption under the orb replaces the old Standby/Live + conversation-state
+  // pair of header chips. It reads as the orb's own label rather than a corner
+  // readout, which is the point — the orb is meant to be the state, and this
+  // caption is the training wheel until its motion alone carries it.
+  const orbCaption = useMemo(() => {
+    if (sessionStatus === 'CONNECTING') return 'Connecting…';
+    if (sessionStatus === 'CONNECTED') return ORB_STATE_LABELS[conversationState];
+    return 'Standby';
+  }, [sessionStatus, conversationState]);
 
   const handleSignIn = () => {
     void signIn('google');
@@ -450,8 +464,6 @@ export default function OrbShowcase() {
     setTheme(ORB_THEME_ORDER[prevIndex]);
   };
 
-  const stateLabel = ORB_STATE_LABELS[conversationState];
-
   if (authStatus !== 'authenticated' || !session?.user) {
     return (
       <div className="relative min-h-screen w-full overflow-hidden bg-slate-950 text-slate-100">
@@ -460,7 +472,9 @@ export default function OrbShowcase() {
 
         <div className="relative flex h-screen flex-col items-center overflow-hidden px-6 py-6 sm:py-8">
           <div className="flex w-full items-center justify-between">
-            <p className="text-sm font-semibold uppercase tracking-[0.6em] text-slate-200">Orby</p>
+            <p className="font-orby text-[0.9rem] uppercase leading-none tracking-[0.5em] text-slate-200/90 [text-shadow:0_0_18px_rgba(129,140,248,0.45)]">
+              Orby
+            </p>
             <span className="text-[0.65rem] font-medium uppercase tracking-[0.2em] text-slate-500">
               Research Preview
             </span>
@@ -510,100 +524,123 @@ export default function OrbShowcase() {
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(56,189,248,0.12),transparent_60%)]" />
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_bottom,rgba(168,85,247,0.08),transparent_55%)]" />
 
-      <div className="relative flex min-h-screen flex-col">
-        <header className="flex flex-wrap items-center justify-between gap-2 px-4 sm:gap-3 sm:px-6 pt-3 sm:pt-8">
-          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-            <button
-              type="button"
-              onClick={() => setShowToolOverlay(true)}
-              className="rounded-full border border-cyan-400/30 bg-cyan-500/10 px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium text-cyan-100 hover:border-cyan-300/60 hover:bg-cyan-500/15 transition whitespace-nowrap"
-            >
-              {toolLabel}
-            </button>
-            <span className="rounded-full border border-amber-400/30 bg-amber-500/10 px-3 py-1 text-[0.65rem] font-semibold uppercase tracking-wide text-amber-200 whitespace-nowrap">
-              Research Preview
-            </span>
-            <CapabilityChecklist data={onboarding.capabilities} />
-          </div>
+      {/*
+        Three fixed bands — chrome / orb / action — as an explicit grid rather
+        than a flex column with ad-hoc padding. The middle 1fr row is what
+        actually centres the orb: it gets exactly the space the header and the
+        action dock don't claim, so the orb sits at the optical centre of the
+        remaining viewport at every height instead of drifting.
 
-          <div className="flex flex-wrap items-center justify-end gap-2 sm:gap-3">
-            {sessionStatus === 'CONNECTED' && (
-              <span className="rounded-full border border-slate-200/15 bg-slate-800/40 px-3 py-1 text-xs font-semibold uppercase tracking-[0.3em] text-slate-200/90">
-                {stateLabel}
-              </span>
-            )}
-            <span
-              className={`rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-wide ${sessionIndicator.color}`}
-            >
-              {sessionIndicator.label}
-            </span>
-            <button
-              type="button"
-              onClick={handleSignOut}
-              className="rounded-full border border-slate-200/20 bg-slate-800/60 px-3 py-1 text-xs font-medium text-slate-200 hover:bg-slate-700 whitespace-nowrap"
-            >
-              Sign out
-            </button>
+        dvh (not vh) so mobile browser chrome collapsing doesn't push the dock
+        under the fold, and safe-area insets on both ends.
+
+        --orb-size is the visualiser's *box*; --orb-diameter is the sphere drawn
+        inside it, which the Liquid Glass scene insets to 71.5% of that box. The
+        mic and the skills grid both measure themselves against the diameter, so
+        the whole dock lines up with the orb's silhouette rather than with the
+        invisible box around it.
+      */}
+      <div
+        className="relative grid h-[100dvh] min-h-[100dvh] grid-rows-[auto_1fr_auto]"
+        style={{
+          paddingTop: 'env(safe-area-inset-top)',
+          paddingBottom: 'env(safe-area-inset-bottom)',
+          '--orb-size': 'min(62vw, 320px)',
+          '--orb-diameter': 'calc(var(--orb-size) * 0.715)',
+        } as React.CSSProperties}
+      >
+        {/* Wordmark is optically centred on the screen axis (the orb's axis), so
+            it sits in the flow centre with the settings control floated out of
+            it — a justify-between row would push it off-centre by the gear. */}
+        <header className="relative flex items-center justify-center px-5 pt-4 sm:px-8 sm:pt-6">
+          <p className="font-orby text-[0.9rem] uppercase leading-none tracking-[0.5em] text-slate-200/90 [text-shadow:0_0_18px_rgba(129,140,248,0.45)] sm:text-base">
+            <span className="pl-[0.5em]">Orby</span>
+          </p>
+          <div className="absolute right-5 top-1/2 -translate-y-1/2 sm:right-8">
+            <SettingsMenu
+              toolLabel={toolLabel}
+              toolsConnected={isWorkspaceConnected}
+              onOpenTools={() => setShowToolOverlay(true)}
+              onSignOut={() => void handleSignOut()}
+            />
           </div>
         </header>
 
-        {graduationBannerStage !== null && (
-          <div className="mx-4 mt-4 flex items-center justify-between rounded-xl border border-cyan-400/30 bg-gradient-to-r from-cyan-500/10 via-sky-500/10 to-purple-500/10 px-4 py-3 text-sm text-cyan-100 sm:mx-6">
-            <span>
-              You&apos;ve unlocked <strong>{STAGE_LABELS[graduationBannerStage as OnboardingStage]}</strong> — new
-              things are possible now hands-free.
-            </span>
-            <button
-              type="button"
-              onClick={() => setGraduationBannerStage(null)}
-              className="ml-3 shrink-0 text-xs text-cyan-200/70 hover:text-cyan-100"
-            >
-              Dismiss
-            </button>
-          </div>
-        )}
-
-        <main className="relative flex flex-1 flex-col items-center justify-center px-6 pb-20 pt-6 sm:pb-28 sm:pt-16">
-          <div className="relative">
-            <div className="w-[min(58vw,300px)] sm:w-[min(50vw,380px)]">
-              <OrbVisualizer theme={theme} state={conversationState} analysis={analysis} />
-            </div>
-
-            <div className="absolute inset-x-0 -bottom-16 flex justify-center">
+        <main className="relative flex min-h-0 flex-col items-center justify-center gap-4 px-5 sm:px-8">
+          {graduationBannerStage !== null && (
+            <div className="absolute inset-x-5 top-0 flex items-center justify-between gap-3 rounded-xl border border-cyan-400/30 bg-gradient-to-r from-cyan-500/10 via-sky-500/10 to-purple-500/10 px-4 py-3 text-sm text-cyan-100 sm:inset-x-8">
+              <span>
+                You&apos;ve unlocked <strong>{STAGE_LABELS[graduationBannerStage as OnboardingStage]}</strong> — new
+                things are possible now hands-free.
+              </span>
               <button
                 type="button"
-                onClick={handleToggleConnection}
-                className="rounded-full border border-slate-200/20 bg-slate-900/70 px-6 py-2 text-sm font-semibold text-slate-100 shadow-[0_12px_24px_rgba(15,23,42,0.45)] hover:bg-slate-800/70 transition backdrop-blur"
+                onClick={() => setGraduationBannerStage(null)}
+                className="shrink-0 text-xs text-cyan-200/70 hover:text-cyan-100"
               >
-                {sessionStatus === 'CONNECTED' ? 'Disconnect' : sessionStatus === 'CONNECTING' ? 'Connecting…' : 'Connect'}
+                Dismiss
               </button>
             </div>
+          )}
+
+          {/* The orb is capped by width (--orb-size) but sized by the height it
+              actually has: `h-full` + `aspect-[1/1.12]` derive the width from
+              this row, and max-width clamps it on tall screens, so whichever
+              axis is scarcer wins. `min-w-0 w-auto` is load-bearing — without
+              it CSS's automatic minimum size lets the scene's own min-content
+              width override the aspect ratio, and the orb overflows the row
+              instead of shrinking (see docs/orb-layout.md).
+
+              This deliberately replaces an earlier `46dvh` term. A fraction of
+              the *viewport* is not the orb's budget; the viewport minus the
+              header and the dock is. Those drift apart every time the dock
+              changes, and the orb silently overflows out of view when they do. */}
+          <div className="flex min-h-0 w-full flex-1 items-center justify-center">
+            <div className="aspect-[1/1.12] h-full w-auto min-w-0 max-w-[var(--orb-size)]">
+              <OrbVisualizer theme={theme} state={conversationState} analysis={analysis} />
+            </div>
           </div>
 
+          <p
+            aria-live="polite"
+            className="text-[0.7rem] font-medium uppercase tracking-[0.35em] text-slate-400"
+          >
+            {orbCaption}
+          </p>
         </main>
 
-        <footer className="pointer-events-none absolute bottom-10 left-0 right-0 flex justify-center px-4">
-          <div className="pointer-events-auto flex items-center gap-6 rounded-full border border-slate-200/20 bg-slate-900/70 px-6 py-3 shadow-[0_20px_40px_rgba(15,23,42,0.45)] backdrop-blur">
-            <button
-              type="button"
-              onClick={goToPreviousTheme}
-              className="rounded-full border border-slate-200/20 bg-slate-800/60 px-3 py-2 text-sm font-medium text-slate-200 hover:bg-slate-700/70 transition"
-            >
-              ←
-            </button>
-            <div className="text-center">
-              <p className="text-[0.65rem] uppercase tracking-[0.35em] text-slate-400">Theme</p>
-              <p className="text-base font-semibold text-slate-100">{themeLabel}</p>
+        {/* Action dock: the mic is the only thing in the thumb zone, with the
+            skills rail directly beneath it — close enough to read as "what you
+            can say into this", far enough not to be mistaken for a control. */}
+        <div className="flex flex-col items-center gap-2 px-5 pb-5 pt-2 sm:px-8 sm:pb-8">
+          <MicButton sessionStatus={sessionStatus} onToggle={() => void handleToggleConnection()} />
+          <CapabilityChecklist data={onboarding.capabilities} />
+        </div>
+
+        {SHOW_THEME_SWITCHER && (
+          <footer className="pointer-events-none absolute bottom-10 left-0 right-0 flex justify-center px-4">
+            <div className="pointer-events-auto flex items-center gap-6 rounded-full border border-slate-200/20 bg-slate-900/70 px-6 py-3 shadow-[0_20px_40px_rgba(15,23,42,0.45)] backdrop-blur">
+              <button
+                type="button"
+                onClick={goToPreviousTheme}
+                className="rounded-full border border-slate-200/20 bg-slate-800/60 px-3 py-2 text-sm font-medium text-slate-200 hover:bg-slate-700/70 transition"
+              >
+                ←
+              </button>
+              <div className="text-center">
+                <p className="text-[0.65rem] uppercase tracking-[0.35em] text-slate-400">Theme</p>
+                <p className="text-base font-semibold text-slate-100">{themeLabel}</p>
+              </div>
+              <button
+                type="button"
+                onClick={goToNextTheme}
+                className="rounded-full border border-slate-200/20 bg-slate-800/60 px-3 py-2 text-sm font-medium text-slate-200 hover:bg-slate-700/70 transition"
+              >
+                →
+              </button>
             </div>
-            <button
-              type="button"
-              onClick={goToNextTheme}
-              className="rounded-full border border-slate-200/20 bg-slate-800/60 px-3 py-2 text-sm font-medium text-slate-200 hover:bg-slate-700/70 transition"
-            >
-              →
-            </button>
-          </div>
-        </footer>
+          </footer>
+        )}
       </div>
 
       {showToolOverlay && (

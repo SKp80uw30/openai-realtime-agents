@@ -3,6 +3,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  max-width: 100%;
+  aspect-ratio: 1;
   transition: transform 0.25s ease, filter 0.25s ease;
 }
 

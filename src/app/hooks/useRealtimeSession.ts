@@ -33,7 +33,7 @@ export function useRealtimeSession(callbacks: RealtimeSessionCallbacks = {}) {
     SessionStatus
   >('DISCONNECTED');
   const { logClientEvent } = useEvent();
-  const { setIsToolExecuting } = useTranscript();
+  const { setIsToolExecuting, setIsUserSpeaking, setIsAssistantSpeaking } = useTranscript();
 
   const updateStatus = useCallback(
     (s: SessionStatus) => {
@@ -247,12 +247,37 @@ export function useRealtimeSession(callbacks: RealtimeSessionCallbacks = {}) {
         historyHandlersRef.current.handleTranscriptionDelta(event);
         break;
       }
+      // Live mic/speaker signals for the orb — fire immediately on VAD/playback
+      // boundaries rather than waiting on transcript items, which lag behind by
+      // however long transcription or response-completion takes (see
+      // useOrbConversationState.ts).
+      case 'input_audio_buffer.speech_started': {
+        setIsUserSpeaking(true);
+        logServerEvent(event);
+        break;
+      }
+      case 'input_audio_buffer.speech_stopped': {
+        setIsUserSpeaking(false);
+        logServerEvent(event);
+        break;
+      }
+      case 'output_audio_buffer.started': {
+        setIsAssistantSpeaking(true);
+        logServerEvent(event);
+        break;
+      }
+      case 'output_audio_buffer.stopped':
+      case 'output_audio_buffer.cleared': {
+        setIsAssistantSpeaking(false);
+        logServerEvent(event);
+        break;
+      }
       default: {
         logServerEvent(event);
         break;
       }
     }
-  }, [historyHandlersRef, logServerEvent, callbacks]);
+  }, [historyHandlersRef, logServerEvent, callbacks, setIsUserSpeaking, setIsAssistantSpeaking]);
 
   const codecParamRef = useRef<string>(
     (typeof window !== 'undefined'
@@ -516,7 +541,9 @@ export function useRealtimeSession(callbacks: RealtimeSessionCallbacks = {}) {
     sessionRef.current?.close();
     sessionRef.current = null;
     updateStatus('DISCONNECTED');
-  }, [updateStatus]);
+    setIsUserSpeaking(false);
+    setIsAssistantSpeaking(false);
+  }, [updateStatus, setIsUserSpeaking, setIsAssistantSpeaking]);
 
   const assertconnected = () => {
     if (!sessionRef.current) throw new Error('RealtimeSession not connected');
@@ -552,6 +579,18 @@ export function useRealtimeSession(callbacks: RealtimeSessionCallbacks = {}) {
     sessionRef.current.transport.sendEvent({ type: 'response.create' } as any);
   }, []);
 
+  // Exposes the mic track already carried by the WebRTC connection so the orb
+  // can visualize the user's own voice while listening, without opening a
+  // second getUserMedia stream (which would prompt for permission again and
+  // capture audio independently of what's actually being sent to the model).
+  const getLocalMediaStream = useCallback((): MediaStream | null => {
+    const transport = sessionRef.current?.transport as OpenAIRealtimeWebRTC | undefined;
+    const peerConnection = transport?.connectionState?.peerConnection;
+    if (!peerConnection) return null;
+    const audioTrack = peerConnection.getSenders().find((sender) => sender.track?.kind === 'audio')?.track;
+    return audioTrack ? new MediaStream([audioTrack]) : null;
+  }, []);
+
   return {
     status,
     connect,
@@ -562,5 +601,6 @@ export function useRealtimeSession(callbacks: RealtimeSessionCallbacks = {}) {
     pushToTalkStart,
     pushToTalkStop,
     interrupt,
+    getLocalMediaStream,
   } as const;
 }

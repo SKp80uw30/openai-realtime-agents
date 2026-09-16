@@ -24,7 +24,7 @@ function getLatestByRole(items: TranscriptItem[], role: 'user' | 'assistant'): T
 }
 
 export function useOrbConversationState({ sessionStatus }: UseOrbConversationStateOptions): OrbState {
-  const { transcriptItems, isToolExecuting } = useTranscript();
+  const { transcriptItems, isToolExecuting, isUserSpeaking, isAssistantSpeaking } = useTranscript();
 
   return useMemo(() => {
     if (sessionStatus !== 'CONNECTED') return OrbState.Idle;
@@ -32,6 +32,21 @@ export function useOrbConversationState({ sessionStatus }: UseOrbConversationSta
     // Check if tools are executing first - highest priority
     if (isToolExecuting) {
       return OrbState.Working;
+    }
+
+    // Live mic/speaker signals (input_audio_buffer.speech_started/stopped,
+    // output_audio_buffer.started/stopped) fire immediately on VAD/playback
+    // boundaries, unlike the transcript-status heuristic below which lags
+    // behind by however long transcription or response-completion takes.
+    // Both true at once means the user started talking over the assistant.
+    if (isUserSpeaking && isAssistantSpeaking) {
+      return OrbState.Interrupted;
+    }
+    if (isUserSpeaking) {
+      return OrbState.Listening;
+    }
+    if (isAssistantSpeaking) {
+      return OrbState.Speaking;
     }
 
     const messages = transcriptItems.filter((item) => item.type === MESSAGE_TYPE);
@@ -73,5 +88,5 @@ export function useOrbConversationState({ sessionStatus }: UseOrbConversationSta
     }
 
     return OrbState.Ready;
-  }, [sessionStatus, transcriptItems, isToolExecuting]);
+  }, [sessionStatus, transcriptItems, isToolExecuting, isUserSpeaking, isAssistantSpeaking]);
 }

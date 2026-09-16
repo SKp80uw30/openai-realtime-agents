@@ -24,6 +24,14 @@ type TranscriptContextValue = {
   updateTranscriptItem: (itemId: string, updatedProperties: Partial<TranscriptItem>) => void;
   isToolExecuting: boolean;
   setIsToolExecuting: (executing: boolean) => void;
+  // Live mic/speaker activity, driven directly by input_audio_buffer.speech_started/stopped
+  // and output_audio_buffer.started/stopped server events (see useRealtimeSession.ts). These
+  // reflect what's happening right now, unlike transcript item status which lags behind by
+  // however long transcription/response-completion takes.
+  isUserSpeaking: boolean;
+  setIsUserSpeaking: (speaking: boolean) => void;
+  isAssistantSpeaking: boolean;
+  setIsAssistantSpeaking: (speaking: boolean) => void;
 };
 
 const TranscriptContext = createContext<TranscriptContextValue | undefined>(undefined);
@@ -31,6 +39,8 @@ const TranscriptContext = createContext<TranscriptContextValue | undefined>(unde
 export const TranscriptProvider: FC<PropsWithChildren> = ({ children }) => {
   const [transcriptItems, setTranscriptItems] = useState<TranscriptItem[]>([]);
   const [isToolExecuting, setIsToolExecuting] = useState(false);
+  const [isUserSpeaking, setIsUserSpeaking] = useState(false);
+  const [isAssistantSpeaking, setIsAssistantSpeaking] = useState(false);
 
   function newTimestampPretty(): string {
     const now = new Date();
@@ -125,6 +135,10 @@ export const TranscriptProvider: FC<PropsWithChildren> = ({ children }) => {
         updateTranscriptItem,
         isToolExecuting,
         setIsToolExecuting,
+        isUserSpeaking,
+        setIsUserSpeaking,
+        isAssistantSpeaking,
+        setIsAssistantSpeaking,
       }}
     >
       {children}
