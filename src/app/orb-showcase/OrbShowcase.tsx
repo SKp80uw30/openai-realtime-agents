@@ -32,7 +32,6 @@ import ToolsOverlay from './ToolsOverlay';
 import MicButton from './MicButton';
 import SettingsMenu from './SettingsMenu';
 import { useOnboarding } from './onboarding/useOnboarding';
-import OnboardingWizard from './onboarding/OnboardingWizard';
 import CapabilityChecklist from './onboarding/CapabilityChecklist';
 
 const STORAGE_KEY = 'mcpServers:personalAssistant';
@@ -227,13 +226,6 @@ export default function OrbShowcase() {
   const isUserTurn = conversationState === OrbState.Listening || conversationState === OrbState.Interrupted;
   const analysis = isUserTurn ? localAnalysis : remoteAnalysis;
 
-  const isWorkspaceConnected = activeMcpServers.length > 0;
-  const showOnboardingWizard =
-    isAuthenticated &&
-    isWorkspaceConnected &&
-    onboarding.stage !== null &&
-    onboarding.stage < ONBOARDING_STAGE.Listening;
-
   const totalTools = aggregateTools(activeMcpServers);
 
   const toolLabel = !areMcpServersReady
@@ -412,7 +404,7 @@ export default function OrbShowcase() {
 
     const guardrail = createModerationGuardrail(personalAssistantCompanyName);
     const agentScenario = createPersonalAssistantScenario({
-      stage: onboarding.stage ?? ONBOARDING_STAGE.Setup,
+      stage: onboarding.stage ?? ONBOARDING_STAGE.Listening,
       contacts: onboarding.contacts,
       categories: onboarding.categories,
     });
@@ -653,21 +645,6 @@ export default function OrbShowcase() {
         </div>
       )}
 
-      {showOnboardingWizard && onboarding.stage !== null && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 px-4">
-          <OnboardingWizard
-            stage={onboarding.stage}
-            contacts={onboarding.contacts}
-            categories={onboarding.categories}
-            onAddContact={onboarding.addContact}
-            onRemoveContact={onboarding.removeContact}
-            onAddCategory={onboarding.addCategory}
-            onRemoveCategory={onboarding.removeCategory}
-            onSetStage={onboarding.setStage}
-            onCompleteCapability={onboarding.completeCapability}
-          />
-        </div>
-      )}
     </div>
   );
 }

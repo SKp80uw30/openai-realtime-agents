@@ -5,7 +5,7 @@ import prisma from "@/app/lib/prisma";
 import { computeAdvancedStage } from "@/app/agentConfigs/emailAgent/stageAdvancement";
 import { toUtcDateOnly } from "@/app/agentConfigs/emailAgent/streak";
 import { computePracticeSummary } from "@/app/lib/practice";
-import { OnboardingStage } from "@/app/types/onboarding";
+import { ONBOARDING_STAGE, OnboardingStage } from "@/app/types/onboarding";
 
 export async function POST(_request: Request, { params }: { params: Promise<{ key: string }> }) {
   const session = await getServerSession(authOptions);
@@ -60,7 +60,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ ke
   const onboarding = await prisma.onboardingProgress.upsert({
     where: { userId },
     update: {},
-    create: { userId },
+    create: { userId, stage: ONBOARDING_STAGE.Listening },
   });
 
   const groupProgress = await prisma.userCapabilityProgress.findMany({
